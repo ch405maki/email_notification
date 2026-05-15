@@ -48,11 +48,6 @@ const studentNavItems: NavItem[] = [
         icon: PenLine,
     },
     {
-        title: 'Email Campaign',
-        href: '/students/campaign',
-        icon: Send,
-    },
-    {
         title: 'Email Logs',
         href: '/students/logs',
         icon: Mail,

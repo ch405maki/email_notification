@@ -7,6 +7,7 @@ use App\Jobs\SendStudentEmailJob;
 use App\Models\EmailLog;
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class StudentController extends Controller
 {
@@ -66,8 +67,11 @@ class StudentController extends Controller
         ]);
     }
 
-    public function sendBulk()
+    public function sendBulk(Request $request)
     {
+        $subjectTemplate = $request->input('subject');
+        $bodyTemplate = $request->input('body');
+
         $sentStudentNumbers = EmailLog::where('status', 'sent')
             ->pluck('student_number')
             ->toArray();
@@ -79,18 +83,24 @@ class StudentController extends Controller
         }
 
         $dispatched = 0;
-        foreach ($students as $student) {
-            $log = EmailLog::create([
-                'student_id'     => $student->id,
-                'student_number' => $student->student_number,
-                'email'          => $student->email,
-                'subject'        => "Student Number: {$student->student_number}",
-                'status'         => 'pending',
-            ]);
+        DB::transaction(function () use ($students, $subjectTemplate, $bodyTemplate, &$dispatched) {
+            foreach ($students as $student) {
+                $subject = $subjectTemplate
+                    ? str_replace('{student_number}', $student->student_number, $subjectTemplate)
+                    : "Student Number: {$student->student_number}";
 
-            SendStudentEmailJob::dispatch($student, $log);
-            $dispatched++;
-        }
+                $log = EmailLog::create([
+                    'student_id'     => $student->id,
+                    'student_number' => $student->student_number,
+                    'email'          => $student->email,
+                    'subject'        => $subject,
+                    'status'         => 'pending',
+                ]);
+
+                SendStudentEmailJob::dispatch($student, $log, $subjectTemplate, $bodyTemplate);
+                $dispatched++;
+            }
+        });
 
         return response()->json([
             'message' => "{$dispatched} emails queued for sending",
@@ -104,6 +114,7 @@ class StudentController extends Controller
         $sent = EmailLog::where('status', 'sent')->count();
         $failed = EmailLog::where('status', 'failed')->count();
         $pending = EmailLog::where('status', 'pending')->count();
+        $unsent = Student::whereDoesntHave('emailLogs', fn($q) => $q->where('status', 'sent'))->count();
 
         return response()->json([
             'data' => [
@@ -111,6 +122,7 @@ class StudentController extends Controller
                 'sent'           => $sent,
                 'failed'         => $failed,
                 'pending'        => $pending,
+                'unsent'         => $unsent,
             ],
         ]);
     }

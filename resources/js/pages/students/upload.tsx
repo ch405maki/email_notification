@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Upload, FileSpreadsheet, Loader2, Download, Send, Users, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react'
+import { Upload, FileSpreadsheet, Loader2, Download, Send, Users, CheckCircle2, XCircle, Clock, AlertCircle, Pencil, ChevronDown, ChevronUp } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -30,6 +30,7 @@ type Stats = {
   sent: number
   failed: number
   pending: number
+  unsent: number
 }
 
 export default function CsvUpload() {
@@ -41,7 +42,20 @@ export default function CsvUpload() {
   const [sending, setSending] = useState(false)
   const [polling, setPolling] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
+  const [showTemplate, setShowTemplate] = useState(false)
+  const [templateSubject, setTemplateSubject] = useState('')
+  const [templateBody, setTemplateBody] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const fetchTemplate = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/v1/emails/template')
+      setTemplateSubject(res.data.data.subject)
+      setTemplateBody(res.data.data.body)
+    } catch { /* use defaults */ }
+  }, [])
+
+  useEffect(() => { fetchTemplate() }, [fetchTemplate])
 
   const fetchStats = useCallback(async () => {
     try {
@@ -174,7 +188,10 @@ export default function CsvUpload() {
   const handleSendAll = async () => {
     setSending(true)
     try {
-      const res = await axios.post('/api/v1/students/send-bulk')
+      const payload: Record<string, unknown> = {}
+      if (templateSubject) payload.subject = templateSubject
+      if (templateBody) payload.body = templateBody
+      const res = await axios.post('/api/v1/students/send-bulk', payload)
       toast.success(res.data.message)
       setPolling(true)
       fetchStats()
@@ -392,36 +409,83 @@ export default function CsvUpload() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <Users className="size-5 text-blue-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Students</p>
-                  <p className="text-lg font-semibold">{stats?.total_students ?? '—'}</p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <Users className="size-5 text-blue-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Students</p>
+                    <p className="text-lg font-semibold">{stats?.total_students ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <CheckCircle2 className="size-5 text-green-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Sent</p>
+                    <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <XCircle className="size-5 text-red-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                    <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <Clock className="size-5 text-yellow-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Pending</p>
+                    <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <Send className="size-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unsent</p>
+                    <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <CheckCircle2 className="size-5 text-green-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Sent</p>
-                  <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <XCircle className="size-5 text-red-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Failed</p>
-                  <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <Clock className="size-5 text-yellow-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pending</p>
-                  <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
-                </div>
-              </div>
+
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTemplate(!showTemplate)}
+                className="flex items-center gap-1 text-muted-foreground"
+              >
+                <Pencil className="size-3.5" />
+                Customize Email Template
+                {showTemplate ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              </Button>
             </div>
+
+            {showTemplate && (
+              <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+                <div>
+                  <Label htmlFor="template-subject">Subject</Label>
+                  <Input
+                    id="template-subject"
+                    value={templateSubject}
+                    onChange={e => setTemplateSubject(e.target.value)}
+                    placeholder="Student Number: {student_number}"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
+                </div>
+                <div>
+                  <Label htmlFor="template-body">Body</Label>
+                  <textarea
+                    id="template-body"
+                    className="flex min-h-[200px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={templateBody}
+                    onChange={e => setTemplateBody(e.target.value)}
+                    placeholder="Enter email body..."
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchTemplate}>Reset to Default</Button>
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <Button onClick={handleSendAll} disabled={sending || !stats?.total_students}>
@@ -434,12 +498,6 @@ export default function CsvUpload() {
                 <Badge variant="secondary" className="animate-pulse">
                   <Loader2 className="size-3 animate-spin mr-1" />
                   Processing...
-                </Badge>
-              )}
-
-              {allDone && (
-                <Badge variant="default" className="bg-green-500">
-                  Complete
                 </Badge>
               )}
             </div>

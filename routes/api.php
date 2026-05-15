@@ -29,6 +29,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/email-logs', [EmailLogController::class, 'index']);
 
+    Route::get('/emails/template', [EmailController::class, 'template']);
     Route::post('/emails/preview', [EmailController::class, 'preview']);
     Route::post('/emails/send-single', [EmailController::class, 'sendSingle']);
 });

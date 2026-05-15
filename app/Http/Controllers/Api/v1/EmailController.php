@@ -10,6 +10,19 @@ use Illuminate\Http\Request;
 
 class EmailController extends Controller
 {
+    public function template()
+    {
+        $subject = 'Student Number: {student_number}';
+        $body = view('emails.student-onboarding', ['studentNumber' => '{student_number}'])->render();
+
+        return response()->json([
+            'data' => [
+                'subject' => $subject,
+                'body'    => $body,
+            ],
+        ]);
+    }
+
     public function preview(Request $request)
     {
         $validated = $request->validate([
