@@ -14,7 +14,7 @@ class StudentController extends Controller
     public function downloadTemplate()
     {
         $headers = [
-            'Content-Type'        => 'text/csv',
+            'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="student_import_template.csv"',
         ];
 
@@ -47,12 +47,16 @@ class StudentController extends Controller
 
         $imported = 0;
         foreach ($rows as $row) {
-            if (count($row) < 2) continue;
+            if (count($row) < 2) {
+                continue;
+            }
 
             $studentNumber = trim($row[0]);
             $email = trim($row[1]);
 
-            if (empty($studentNumber) || empty($email)) continue;
+            if (empty($studentNumber) || empty($email)) {
+                continue;
+            }
 
             Student::updateOrCreate(
                 ['student_number' => $studentNumber],
@@ -90,11 +94,11 @@ class StudentController extends Controller
                     : "Student Number: {$student->student_number}";
 
                 $log = EmailLog::create([
-                    'student_id'     => $student->id,
+                    'student_id' => $student->id,
                     'student_number' => $student->student_number,
-                    'email'          => $student->email,
-                    'subject'        => $subject,
-                    'status'         => 'pending',
+                    'email' => $student->email,
+                    'subject' => $subject,
+                    'status' => 'pending',
                 ]);
 
                 SendStudentEmailJob::dispatch($student, $log, $subjectTemplate, $bodyTemplate);
@@ -104,7 +108,7 @@ class StudentController extends Controller
 
         return response()->json([
             'message' => "{$dispatched} emails queued for sending",
-            'count'   => $dispatched,
+            'count' => $dispatched,
         ]);
     }
 
@@ -114,15 +118,15 @@ class StudentController extends Controller
         $sent = EmailLog::where('status', 'sent')->count();
         $failed = EmailLog::where('status', 'failed')->count();
         $pending = EmailLog::where('status', 'pending')->count();
-        $unsent = Student::whereDoesntHave('emailLogs', fn($q) => $q->where('status', 'sent'))->count();
+        $unsent = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'))->count();
 
         return response()->json([
             'data' => [
                 'total_students' => $total,
-                'sent'           => $sent,
-                'failed'         => $failed,
-                'pending'        => $pending,
-                'unsent'         => $unsent,
+                'sent' => $sent,
+                'failed' => $failed,
+                'pending' => $pending,
+                'unsent' => $unsent,
             ],
         ]);
     }
@@ -146,7 +150,7 @@ class StudentController extends Controller
         return response()->json([
             'data' => [
                 'existing' => $existing,
-                'sent'     => $sent,
+                'sent' => $sent,
             ],
         ]);
     }
@@ -170,7 +174,7 @@ class StudentController extends Controller
 
         return response()->json([
             'message' => "{$imported} students imported successfully",
-            'count'   => $imported,
+            'count' => $imported,
         ]);
     }
 }
