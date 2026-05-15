@@ -22,6 +22,7 @@ class StudentController extends Controller
         $rows = [
             ['2026-0026', 'markmanuel0317@gmail.com'],
             ['2026-0027', 'wosoje7325@acanok.com'],
+            ['2026-0028', 'corota9854@bitmah.com'],
         ];
 
         $callback = function () use ($columns, $rows) {

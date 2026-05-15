@@ -40,7 +40,6 @@ export default function CsvUpload() {
   const [importing, setImporting] = useState(false)
   const [imported, setImported] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
-  const [polling, setPolling] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [templateSubject, setTemplateSubject] = useState('')
@@ -109,12 +108,6 @@ export default function CsvUpload() {
   }, [])
 
   useEffect(() => { fetchStats() }, [fetchStats])
-
-  useEffect(() => {
-    if (!polling) return
-    const interval = setInterval(fetchStats, 3000)
-    return () => clearInterval(interval)
-  }, [polling, fetchStats])
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -232,12 +225,11 @@ export default function CsvUpload() {
   const handleSendAll = async () => {
     setSending(true)
     try {
-      const payload: Record<string, unknown> = {}
+      const payload: Record<string, unknown> = { sync: true }
       if (templateSubject) payload.subject = templateSubject
       if (templateBody) payload.body = templateBody
       const res = await axios.post('/api/v1/students/send-bulk', payload)
       toast.success(res.data.message)
-      setPolling(true)
       fetchStats()
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to send emails')
@@ -258,8 +250,6 @@ export default function CsvUpload() {
   const newCount = preview.filter(r => r.status === 'new').length
   const duplicateCount = preview.filter(r => r.status === 'duplicate').length
   const alreadySentCount = alreadySentRows.length
-  const allDone = stats && stats.pending === 0 && (stats.sent > 0 || stats.failed > 0)
-
   const statusBadge = (status: string) => {
     switch (status) {
       case 'new':
@@ -334,35 +324,35 @@ export default function CsvUpload() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <CheckCircle2 className="size-5 text-green-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Sent</p>
-                    <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <XCircle className="size-5 text-red-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Failed</p>
-                    <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <Clock className="size-5 text-yellow-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Pending</p>
-                    <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <Send className="size-5 text-orange-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Unsent</p>
-                    <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
-                  </div>
+              <div className="flex items-center gap-3 p-3 border rounded-md">
+                <CheckCircle2 className="size-5 text-green-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Sent</p>
+                  <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
                 </div>
               </div>
+              <div className="flex items-center gap-3 p-3 border rounded-md">
+                <Send className="size-5 text-orange-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Unsent</p>
+                  <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 border rounded-md">
+                <Clock className="size-5 text-yellow-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Pending</p>
+                  <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 border rounded-md">
+                <XCircle className="size-5 text-red-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Failed</p>
+                  <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
+                </div>
+              </div>
+            </div>
 
             <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
               <DialogContent className="sm:max-w-2xl">
@@ -407,17 +397,9 @@ export default function CsvUpload() {
 
             <div className="flex justify-end items-center gap-3">
               <Button onClick={handleSendAll} disabled={sending || !stats?.unsent}>
-                {sending && <Loader2 className="size-4 animate-spin" />}
-                <Send className="size-4" />
-                Send All Emails
+                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                {sending ? 'Sending...' : 'Send All Emails'}
               </Button>
-
-              {polling && !allDone && (
-                <Badge variant="secondary" className="animate-pulse">
-                  <Loader2 className="size-3 animate-spin mr-1" />
-                  Processing...
-                </Badge>
-              )}
             </div>
 
             {!stats?.total_students && (
@@ -467,15 +449,6 @@ export default function CsvUpload() {
                     Pending — Needs Email
                     <Badge variant="outline" className="ml-1 text-xs">{pendingRows.length}</Badge>
                   </h3>
-                  <div className="flex gap-2">
-                    {newCount > 0 && (
-                      <Button size="sm" onClick={handleImport} disabled={importing}>
-                        {importing && <Loader2 className="size-4 animate-spin" />}
-                        <FileSpreadsheet className="size-4" />
-                        Import {newCount} New
-                      </Button>
-                    )}
-                  </div>
                 </div>
                 {pendingRows.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto border rounded-md">
