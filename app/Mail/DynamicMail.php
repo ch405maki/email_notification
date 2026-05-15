@@ -13,22 +13,21 @@ class DynamicMail extends Mailable
     use Queueable, SerializesModels;
 
     public function __construct(
-        public string $subject,
+        public string $emailSubject,
         public string $body
     ) {}
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->subject);
+        return new Envelope(subject: $this->emailSubject);
     }
 
     public function content(): Content
     {
-        $body = str_replace(['<br>', '<br/>', '<br />'], "\r\n", $this->body);
-        $body = preg_replace("/\r\n|\r|\n/", "\r\n", $body);
+        $body = nl2br(e($this->body));
 
         return new Content(
-            text: 'emails.dynamic',
+            view: 'emails.dynamic',
             with: ['body' => $body],
         );
     }
