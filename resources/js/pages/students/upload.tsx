@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Upload, FileSpreadsheet, Loader2, Download, Send, Users, CheckCircle2, XCircle, Clock, AlertCircle, Pencil, ChevronDown, ChevronUp } from 'lucide-react'
+import { Upload, FileSpreadsheet, Loader2, Download, Send, CheckCircle2, XCircle, Clock, AlertCircle, Pencil } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -42,20 +42,64 @@ export default function CsvUpload() {
   const [sending, setSending] = useState(false)
   const [polling, setPolling] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
-  const [showTemplate, setShowTemplate] = useState(false)
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [templateSubject, setTemplateSubject] = useState('')
   const [templateBody, setTemplateBody] = useState('')
+  const [editSubject, setEditSubject] = useState('')
+  const [editBody, setEditBody] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const loadFromStorage = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('email_template')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.subject && parsed.body) {
+          setTemplateSubject(parsed.subject)
+          setTemplateBody(parsed.body)
+          return true
+        }
+      }
+    } catch { /* ignore */ }
+    return false
+  }, [])
+
   const fetchTemplate = useCallback(async () => {
+    if (loadFromStorage()) return
     try {
       const res = await axios.get('/api/v1/emails/template')
       setTemplateSubject(res.data.data.subject)
       setTemplateBody(res.data.data.body)
     } catch { /* use defaults */ }
-  }, [])
+  }, [loadFromStorage])
 
   useEffect(() => { fetchTemplate() }, [fetchTemplate])
+
+  const handleSaveTemplate = () => {
+    setTemplateSubject(editSubject)
+    setTemplateBody(editBody)
+    try {
+      localStorage.setItem('email_template', JSON.stringify({ subject: editSubject, body: editBody }))
+    } catch { /* storage full */ }
+    setTemplateDialogOpen(false)
+  }
+
+  const handleResetDefault = async () => {
+    try {
+      localStorage.removeItem('email_template')
+      const res = await axios.get('/api/v1/emails/template')
+      setEditSubject(res.data.data.subject)
+      setEditBody(res.data.data.body)
+      setTemplateSubject(res.data.data.subject)
+      setTemplateBody(res.data.data.body)
+    } catch { /* use defaults */ }
+  }
+
+  const openTemplateDialog = () => {
+    setEditSubject(templateSubject)
+    setEditBody(templateBody)
+    setTemplateDialogOpen(true)
+  }
 
   const fetchStats = useCallback(async () => {
     try {
@@ -242,6 +286,10 @@ export default function CsvUpload() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={openTemplateDialog}>
+              <Pencil className="size-4" />
+              Customize Template
+            </Button>
             <Button variant="outline" onClick={handleDownload} disabled={downloading}>
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Download Template
@@ -273,6 +321,117 @@ export default function CsvUpload() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Send className="size-4" />
+              Send All Emails
+            </CardTitle>
+            <CardDescription>
+              Send onboarding emails to all students who haven't received one yet
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <CheckCircle2 className="size-5 text-green-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Sent</p>
+                    <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <XCircle className="size-5 text-red-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Failed</p>
+                    <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <Clock className="size-5 text-yellow-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Pending</p>
+                    <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 border rounded-md">
+                  <Send className="size-5 text-orange-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unsent</p>
+                    <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+            <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+              <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Customize Email Template</DialogTitle>
+                  <DialogDescription>
+                    Edit the subject and body used for bulk emails. Use {'{student_number}'} as a placeholder.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="template-subject">Subject</Label>
+                    <Input
+                      id="template-subject"
+                      value={editSubject}
+                      onChange={e => setEditSubject(e.target.value)}
+                      placeholder="Student Number: {student_number}"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="template-body">Body</Label>
+                    <textarea
+                      id="template-body"
+                      className="flex min-h-[250px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={editBody}
+                      onChange={e => setEditBody(e.target.value)}
+                      placeholder="Enter email body..."
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Button variant="outline" size="sm" onClick={handleResetDefault}>Reset to Default</Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handleSaveTemplate}>Save</Button>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <div className="flex justify-end items-center gap-3">
+              <Button onClick={handleSendAll} disabled={sending || !stats?.unsent}>
+                {sending && <Loader2 className="size-4 animate-spin" />}
+                <Send className="size-4" />
+                Send All Emails
+              </Button>
+
+              {polling && !allDone && (
+                <Badge variant="secondary" className="animate-pulse">
+                  <Loader2 className="size-3 animate-spin mr-1" />
+                  Processing...
+                </Badge>
+              )}
+            </div>
+
+            {!stats?.total_students && (
+              <p className="text-sm text-muted-foreground">
+                No students found. Upload a CSV first.
+              </p>
+            )}
+            {stats && stats.total_students > 0 && !stats.unsent && (
+              <p className="text-sm text-muted-foreground">
+                All students have already received their emails.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {preview.length > 0 && (
           <Card>
@@ -397,118 +556,6 @@ export default function CsvUpload() {
             </CardContent>
           </Card>
         )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Send className="size-4" />
-              Send All Emails
-            </CardTitle>
-            <CardDescription>
-              Send onboarding emails to all students who haven't received one yet
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <Users className="size-5 text-blue-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total Students</p>
-                    <p className="text-lg font-semibold">{stats?.total_students ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <CheckCircle2 className="size-5 text-green-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Sent</p>
-                    <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <XCircle className="size-5 text-red-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Failed</p>
-                    <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <Clock className="size-5 text-yellow-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Pending</p>
-                    <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 border rounded-md">
-                  <Send className="size-5 text-orange-500" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Unsent</p>
-                    <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
-                  </div>
-                </div>
-              </div>
-
-            <div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowTemplate(!showTemplate)}
-                className="flex items-center gap-1 text-muted-foreground"
-              >
-                <Pencil className="size-3.5" />
-                Customize Email Template
-                {showTemplate ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-              </Button>
-            </div>
-
-            {showTemplate && (
-              <div className="space-y-3 p-3 border rounded-md bg-muted/30">
-                <div>
-                  <Label htmlFor="template-subject">Subject</Label>
-                  <Input
-                    id="template-subject"
-                    value={templateSubject}
-                    onChange={e => setTemplateSubject(e.target.value)}
-                    placeholder="Student Number: {student_number}"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
-                </div>
-                <div>
-                  <Label htmlFor="template-body">Body</Label>
-                  <textarea
-                    id="template-body"
-                    className="flex min-h-[200px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={templateBody}
-                    onChange={e => setTemplateBody(e.target.value)}
-                    placeholder="Enter email body..."
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
-                </div>
-                <Button variant="outline" size="sm" onClick={fetchTemplate}>Reset to Default</Button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <Button onClick={handleSendAll} disabled={sending || !stats?.total_students}>
-                {sending && <Loader2 className="size-4 animate-spin" />}
-                <Send className="size-4" />
-                Send All Emails
-              </Button>
-
-              {polling && !allDone && (
-                <Badge variant="secondary" className="animate-pulse">
-                  <Loader2 className="size-3 animate-spin mr-1" />
-                  Processing...
-                </Badge>
-              )}
-            </div>
-
-            {!stats?.total_students && (
-              <p className="text-sm text-muted-foreground">
-                No students found. Upload a CSV first.
-              </p>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </AppLayout>
   )
