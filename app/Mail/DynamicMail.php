@@ -24,11 +24,9 @@ class DynamicMail extends Mailable
 
     public function content(): Content
     {
-        $body = nl2br(e($this->body));
-
         return new Content(
             view: 'emails.dynamic',
-            with: ['body' => $body],
+            with: ['body' => new \Illuminate\Support\HtmlString($this->body)],
         );
     }
 

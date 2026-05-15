@@ -282,7 +282,7 @@ export default function CsvUpload() {
             </Button>
             <Button variant="outline" onClick={handleDownload} disabled={downloading}>
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-              Download Template
+              Template
             </Button>
             <Button onClick={() => setDialogOpen(true)}>
               <Upload className="size-4" />
