@@ -68,7 +68,11 @@ class StudentController extends Controller
 
     public function sendBulk()
     {
-        $students = Student::all();
+        $sentStudentNumbers = EmailLog::where('status', 'sent')
+            ->pluck('student_number')
+            ->toArray();
+
+        $students = Student::whereNotIn('student_number', $sentStudentNumbers)->get();
 
         if ($students->isEmpty()) {
             return response()->json(['message' => 'No students found'], 400);
@@ -108,6 +112,53 @@ class StudentController extends Controller
                 'failed'         => $failed,
                 'pending'        => $pending,
             ],
+        ]);
+    }
+
+    public function checkBatch(Request $request)
+    {
+        $request->validate([
+            'student_numbers' => 'required|array',
+            'student_numbers.*' => 'string',
+        ]);
+
+        $studentNumbers = $request->student_numbers;
+        $existing = Student::whereIn('student_number', $studentNumbers)
+            ->pluck('student_number')
+            ->toArray();
+        $sent = EmailLog::whereIn('student_number', $studentNumbers)
+            ->where('status', 'sent')
+            ->pluck('student_number')
+            ->toArray();
+
+        return response()->json([
+            'data' => [
+                'existing' => $existing,
+                'sent'     => $sent,
+            ],
+        ]);
+    }
+
+    public function importJson(Request $request)
+    {
+        $request->validate([
+            'rows' => 'required|array',
+            'rows.*.student_number' => 'required|string',
+            'rows.*.email' => 'required|email',
+        ]);
+
+        $imported = 0;
+        foreach ($request->rows as $row) {
+            Student::updateOrCreate(
+                ['student_number' => $row['student_number']],
+                ['email' => $row['email'], 'student_number' => $row['student_number']]
+            );
+            $imported++;
+        }
+
+        return response()->json([
+            'message' => "{$imported} students imported successfully",
+            'count'   => $imported,
         ]);
     }
 }

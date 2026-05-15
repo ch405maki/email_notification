@@ -22,6 +22,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/students/download-template', [StudentController::class, 'downloadTemplate']);
     Route::post('/students/upload', [StudentController::class, 'upload']);
+    Route::post('/students/import-json', [StudentController::class, 'importJson']);
+    Route::post('/students/check-batch', [StudentController::class, 'checkBatch']);
     Route::post('/students/send-bulk', [StudentController::class, 'sendBulk']);
     Route::get('/students/stats', [StudentController::class, 'stats']);
 
