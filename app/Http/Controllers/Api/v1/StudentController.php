@@ -20,8 +20,8 @@ class StudentController extends Controller
 
         $columns = ['student_number', 'email'];
         $rows = [
-            ['2026-0026', 'test@email.com'],
-            ['2026-0027', 'test2@email.com'],
+            ['2026-0026', 'markmanuel0317@gmail.com'],
+            ['2026-0027', 'wosoje7325@acanok.com'],
         ];
 
         $callback = function () use ($columns, $rows) {
@@ -75,39 +75,44 @@ class StudentController extends Controller
     {
         $subjectTemplate = $request->input('subject');
         $bodyTemplate = $request->input('body');
-
-        $sentStudentNumbers = EmailLog::where('status', 'sent')
-            ->pluck('student_number')
-            ->toArray();
-
-        $students = Student::whereNotIn('student_number', $sentStudentNumbers)->get();
-
-        if ($students->isEmpty()) {
-            return response()->json(['message' => 'No students found'], 400);
-        }
+        $sync = $request->boolean('sync');
 
         $dispatched = 0;
-        DB::transaction(function () use ($students, $subjectTemplate, $bodyTemplate, &$dispatched) {
-            foreach ($students as $student) {
-                $subject = $subjectTemplate
-                    ? str_replace('{student_number}', $student->student_number, $subjectTemplate)
-                    : "Student Number: {$student->student_number}";
 
-                $log = EmailLog::create([
-                    'student_id' => $student->id,
-                    'student_number' => $student->student_number,
-                    'email' => $student->email,
-                    'subject' => $subject,
-                    'status' => 'pending',
-                ]);
+        $query = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'));
 
-                SendStudentEmailJob::dispatch($student, $log, $subjectTemplate, $bodyTemplate);
-                $dispatched++;
-            }
+        if (!$query->exists()) {
+            return response()->json(['message' => 'No students to send to'], 400);
+        }
+
+        $query->chunk(100, function ($students) use ($subjectTemplate, $bodyTemplate, $sync, &$dispatched) {
+            DB::transaction(function () use ($students, $subjectTemplate, $bodyTemplate, $sync, &$dispatched) {
+                foreach ($students as $student) {
+                    $subject = $subjectTemplate
+                        ? str_replace('{student_number}', $student->student_number, $subjectTemplate)
+                        : "Student Number: {$student->student_number}";
+
+                    $log = EmailLog::create([
+                        'student_id' => $student->id,
+                        'student_number' => $student->student_number,
+                        'email' => $student->email,
+                        'subject' => $subject,
+                        'status' => 'pending',
+                    ]);
+
+                    if ($sync) {
+                        (new SendStudentEmailJob($student, $log, $subjectTemplate, $bodyTemplate))->handle();
+                    } else {
+                        SendStudentEmailJob::dispatch($student, $log, $subjectTemplate, $bodyTemplate);
+                    }
+                    $dispatched++;
+                }
+            });
         });
 
+        $mode = $sync ? 'sent' : 'queued';
         return response()->json([
-            'message' => "{$dispatched} emails queued for sending",
+            'message' => "{$dispatched} emails {$mode} for sending",
             'count' => $dispatched,
         ]);
     }

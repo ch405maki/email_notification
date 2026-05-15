@@ -51,6 +51,7 @@ class EmailController extends Controller
 
         $studentNumber = $validated['student_number'];
         $email = $validated['email'];
+        $sync = $request->boolean('sync');
 
         $student = Student::updateOrCreate(
             ['student_number' => $studentNumber],
@@ -65,10 +66,19 @@ class EmailController extends Controller
             'status'         => 'pending',
         ]);
 
-        SendStudentEmailJob::dispatch($student, $log);
+        if ($sync) {
+            (new SendStudentEmailJob($student, $log))->handle();
+        } else {
+            SendStudentEmailJob::dispatch($student, $log);
+        }
+
+        $status = $log->fresh()->status;
+        if ($status === 'sent') {
+            return response()->json(['message' => "Email sent to {$studentNumber}"]);
+        }
 
         return response()->json([
-            'message' => "Email queued for {$studentNumber}",
-        ]);
+            'message' => $sync ? "Email sending failed" : "Email queued for {$studentNumber}",
+        ], $sync ? 500 : 200);
     }
 }

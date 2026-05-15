@@ -10,6 +10,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -26,6 +27,21 @@ class SendStudentEmailJob implements ShouldQueue
         public ?string $subjectTemplate = null,
         public ?string $bodyTemplate = null
     ) {}
+
+    public function backoff(): array
+    {
+        return [5, 15, 60];
+    }
+
+    public function retryUntil(): \DateTime
+    {
+        return now()->addMinutes(15);
+    }
+
+    public function middleware(): array
+    {
+        return [new RateLimited('emails')];
+    }
 
     public function handle(): void
     {
@@ -47,7 +63,7 @@ class SendStudentEmailJob implements ShouldQueue
                 'status' => 'sent',
                 'sent_at' => now(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Email send failed for {$studentNumber}: {$e->getMessage()}");
             $this->emailLog->update([
                 'status' => 'failed',
