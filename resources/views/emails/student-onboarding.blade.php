@@ -209,8 +209,8 @@
 
                 <div class="credential-box">
                     <p>Username: <strong>{{ $studentNumber }}</strong></p>
-                    <p>Password: <strong>LASTNAME9999</strong></p>
-                    <p class="format-hint">Format: Last name + birth month + birthday (e.g. DELA CRUZ0317)</p>
+                    <p>Password: <strong >Format: Last name + birth month + birthday</strong></p>
+                    <p class="format-hint"> (e.g. LASTNAME0214)</p>
                 </div>
 
                 <div class="section">
