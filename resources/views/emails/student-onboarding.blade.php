@@ -180,7 +180,9 @@
         <div class="body">
 
             <p class="greeting">
-                Good day, you are now <strong>officially enrolled</strong>.
+                Good day!
+              <br/>
+              You are now <strong>OFFICIALLY ENROLLED</strong>.
             </p>
 
             <p style="font-size:15px; margin:0 0 10px;">
@@ -241,10 +243,6 @@
             </div>
 
         </div>
-
-        <!-- FOOTER --> 
-        <div class="footer"> <p>This is an automated message. Please do not reply directly to this email.</p> </div>
-
     </div>
 
 </div>
