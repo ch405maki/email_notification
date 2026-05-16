@@ -188,7 +188,7 @@
             </p>
 
             <div class="credential-box">
-                <p>Username: <strong>{student_number}</strong></p>
+                <p>Username: <strong>{{ $studentNumber }}</strong></p>
                 <p>Password: <strong>LASTNAME0214</strong></p>
                 <p class="format-hint">Format: Last name + birth month + birthday</p>
             </div>
