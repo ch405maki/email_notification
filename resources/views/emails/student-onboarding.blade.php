@@ -234,12 +234,12 @@
             <div class="closing">
                 <p>Thank you and stay safe.</p>
                 <div class="signature">
-                  <img 
-                      src="https://ci3.googleusercontent.com/mail-sig/AIorK4wFhEsPJY9fyjriPVcdqjlGr55bpBjIm9QHo-5dani60uJ2vOGTV7ugMupge9IpExCkoZEKv3XnirSO"
-                      alt="ITC — Information Technology Center"
-                      style="max-width:280px; height:auto; display:block; text-align:left;"
-                  >
-              </div>
+                    <img 
+                        src="https://ci3.googleusercontent.com/mail-sig/AIorK4wFhEsPJY9fyjriPVcdqjlGr55bpBjIm9QHo-5dani60uJ2vOGTV7ugMupge9IpExCkoZEKv3XnirSO"
+                        alt="ITC — Information Technology Center"
+                        style="max-width:280px; height:auto; display:block; text-align:left;"
+                    >
+                </div>
             </div>
 
         </div>
