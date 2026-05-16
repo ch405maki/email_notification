@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SendStudentEmailJob;
 use App\Models\EmailLog;
 use App\Models\Student;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -41,33 +42,43 @@ class StudentController extends Controller
             'file' => 'required|file|mimes:csv,txt',
         ]);
 
-        $rows = array_map('str_getcsv', file($request->file('file')->getRealPath()));
-        $header = array_shift($rows);
+        try {
+            $rows = array_map('str_getcsv', file($request->file('file')->getRealPath()));
+            $header = array_shift($rows);
 
-        $imported = 0;
-        foreach ($rows as $row) {
-            if (count($row) < 2) {
-                continue;
+            $imported = 0;
+            foreach ($rows as $row) {
+                if (count($row) < 2) {
+                    continue;
+                }
+
+                $studentNumber = trim($row[0]);
+                $email = trim($row[1]);
+
+                if (empty($studentNumber) || empty($email)) {
+                    continue;
+                }
+
+                Student::updateOrCreate(
+                    ['student_number' => $studentNumber],
+                    ['email' => $email, 'student_number' => $studentNumber]
+                );
+                $imported++;
             }
 
-            $studentNumber = trim($row[0]);
-            $email = trim($row[1]);
-
-            if (empty($studentNumber) || empty($email)) {
-                continue;
-            }
-
-            Student::updateOrCreate(
-                ['student_number' => $studentNumber],
-                ['email' => $email, 'student_number' => $studentNumber]
-            );
-            $imported++;
+            return response()->json([
+                'message' => "{$imported} students imported successfully",
+                'count' => $imported,
+            ]);
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'A database error occurred. Duplicate student numbers or emails detected in the file or database.',
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'An unexpected error occurred while importing.',
+            ], 500);
         }
-
-        return response()->json([
-            'message' => "{$imported} students imported successfully",
-            'count' => $imported,
-        ]);
     }
 
     public function sendBulk(Request $request)
@@ -80,7 +91,7 @@ class StudentController extends Controller
 
         $query = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'));
 
-        if (!$query->exists()) {
+        if (! $query->exists()) {
             return response()->json(['message' => 'No students to send to'], 400);
         }
 
@@ -110,6 +121,7 @@ class StudentController extends Controller
         });
 
         $mode = $sync ? 'sent' : 'queued';
+
         return response()->json([
             'message' => "{$dispatched} emails {$mode} for sending",
             'count' => $dispatched,
@@ -167,18 +179,28 @@ class StudentController extends Controller
             'rows.*.email' => 'required|email',
         ]);
 
-        $imported = 0;
-        foreach ($request->rows as $row) {
-            Student::updateOrCreate(
-                ['student_number' => $row['student_number']],
-                ['email' => $row['email'], 'student_number' => $row['student_number']]
-            );
-            $imported++;
-        }
+        try {
+            $imported = 0;
+            foreach ($request->rows as $row) {
+                Student::updateOrCreate(
+                    ['student_number' => $row['student_number']],
+                    ['email' => $row['email'], 'student_number' => $row['student_number']]
+                );
+                $imported++;
+            }
 
-        return response()->json([
-            'message' => "{$imported} students imported successfully",
-            'count' => $imported,
-        ]);
+            return response()->json([
+                'message' => "{$imported} students imported successfully",
+                'count' => $imported,
+            ]);
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'A database error occurred. Duplicate student numbers or emails detected.',
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'An unexpected error occurred while importing.',
+            ], 500);
+        }
     }
 }

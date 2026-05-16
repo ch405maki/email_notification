@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SendStudentEmailJob;
 use App\Models\EmailLog;
 use App\Models\Student;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 
 class EmailController extends Controller
@@ -18,7 +19,7 @@ class EmailController extends Controller
         return response()->json([
             'data' => [
                 'subject' => $subject,
-                'body'    => $body,
+                'body' => $body,
             ],
         ]);
     }
@@ -27,7 +28,7 @@ class EmailController extends Controller
     {
         $validated = $request->validate([
             'student_number' => 'required|string',
-            'email'          => 'required|email',
+            'email' => 'required|email',
         ]);
 
         $studentNumber = $validated['student_number'];
@@ -37,7 +38,7 @@ class EmailController extends Controller
         return response()->json([
             'data' => [
                 'subject' => $subject,
-                'body'    => $body,
+                'body' => $body,
             ],
         ]);
     }
@@ -46,39 +47,59 @@ class EmailController extends Controller
     {
         $validated = $request->validate([
             'student_number' => 'required|string',
-            'email'          => 'required|email',
+            'email' => 'required|email',
         ]);
 
         $studentNumber = $validated['student_number'];
         $email = $validated['email'];
         $sync = $request->boolean('sync');
 
-        $student = Student::updateOrCreate(
-            ['student_number' => $studentNumber],
-            ['email' => $email, 'student_number' => $studentNumber]
-        );
+        try {
+            $existingEmail = Student::where('email', $email)
+                ->where('student_number', '!=', $studentNumber)
+                ->exists();
 
-        $log = EmailLog::create([
-            'student_id'     => $student->id,
-            'student_number' => $studentNumber,
-            'email'          => $email,
-            'subject'        => "Student Number: {$studentNumber}",
-            'status'         => 'pending',
-        ]);
+            if ($existingEmail) {
+                return response()->json([
+                    'message' => "Email {$email} is already used by another student.",
+                ], 422);
+            }
 
-        if ($sync) {
-            (new SendStudentEmailJob($student, $log))->handle();
-        } else {
-            SendStudentEmailJob::dispatch($student, $log);
+            $student = Student::updateOrCreate(
+                ['student_number' => $studentNumber],
+                ['email' => $email, 'student_number' => $studentNumber]
+            );
+
+            $log = EmailLog::create([
+                'student_id' => $student->id,
+                'student_number' => $studentNumber,
+                'email' => $email,
+                'subject' => "Student Number: {$studentNumber}",
+                'status' => 'pending',
+            ]);
+
+            if ($sync) {
+                (new SendStudentEmailJob($student, $log))->handle();
+            } else {
+                SendStudentEmailJob::dispatch($student, $log);
+            }
+
+            $status = $log->fresh()->status;
+            if ($status === 'sent') {
+                return response()->json(['message' => "Email sent to {$studentNumber}"]);
+            }
+
+            return response()->json([
+                'message' => $sync ? 'Email sending failed' : "Email queued for {$studentNumber}",
+            ], $sync ? 500 : 200);
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'A database error occurred. The student number or email may already exist.',
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'An unexpected error occurred. Please try again.',
+            ], 500);
         }
-
-        $status = $log->fresh()->status;
-        if ($status === 'sent') {
-            return response()->json(['message' => "Email sent to {$studentNumber}"]);
-        }
-
-        return response()->json([
-            'message' => $sync ? "Email sending failed" : "Email queued for {$studentNumber}",
-        ], $sync ? 500 : 200);
     }
 }
