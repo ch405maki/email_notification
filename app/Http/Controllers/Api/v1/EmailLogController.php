@@ -17,7 +17,49 @@ class EmailLogController extends Controller
         }
 
         return response()->json([
-            'data' => $query->paginate(20),
+            'data' => $query->paginate(10),
+        ]);
+    }
+
+    public function show(EmailLog $emailLog)
+    {
+        return response()->json([
+            'data' => $emailLog,
+        ]);
+    }
+
+    public function update(Request $request, EmailLog $emailLog)
+    {
+        $validated = $request->validate([
+            'status' => 'sometimes|in:pending,sent,failed',
+            'error_message' => 'nullable|string',
+            'sent_at' => 'nullable|date',
+        ]);
+
+        if (isset($validated['status'])) {
+            $emailLog->status = $validated['status'];
+        }
+        if (array_key_exists('error_message', $validated)) {
+            $emailLog->error_message = $validated['error_message'];
+        }
+        if (array_key_exists('sent_at', $validated)) {
+            $emailLog->sent_at = $validated['sent_at'];
+        }
+
+        $emailLog->save();
+
+        return response()->json([
+            'message' => 'Email log updated successfully',
+            'data' => $emailLog,
+        ]);
+    }
+
+    public function destroy(EmailLog $emailLog)
+    {
+        $emailLog->delete();
+
+        return response()->json([
+            'message' => 'Email log deleted successfully',
         ]);
     }
 }

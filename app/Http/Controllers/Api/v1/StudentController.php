@@ -128,6 +128,38 @@ class StudentController extends Controller
         ]);
     }
 
+    public function unsent(Request $request)
+    {
+        $students = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'))
+            ->paginate(10);
+
+        return response()->json(['data' => $students]);
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'student_number' => 'required|string|unique:students,student_number,' . $student->id,
+            'email' => 'required|email|unique:students,email,' . $student->id,
+        ]);
+
+        $student->update($validated);
+
+        return response()->json([
+            'message' => "Student {$student->student_number} updated successfully",
+            'data' => $student,
+        ]);
+    }
+
+    public function destroy(Student $student)
+    {
+        $student->delete();
+
+        return response()->json([
+            'message' => "Student {$student->student_number} deleted successfully",
+        ]);
+    }
+
     public function stats()
     {
         $total = Student::count();

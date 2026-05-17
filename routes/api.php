@@ -25,9 +25,15 @@ Route::prefix('v1')->group(function () {
     Route::post('/students/import-json', [StudentController::class, 'importJson']);
     Route::post('/students/check-batch', [StudentController::class, 'checkBatch']);
     Route::post('/students/send-bulk', [StudentController::class, 'sendBulk']);
+    Route::get('/students/unsent', [StudentController::class, 'unsent']);
+    Route::put('/students/{student}', [StudentController::class, 'update']);
+    Route::delete('/students/{student}', [StudentController::class, 'destroy']);
     Route::get('/students/stats', [StudentController::class, 'stats']);
 
     Route::get('/email-logs', [EmailLogController::class, 'index']);
+    Route::get('/email-logs/{emailLog}', [EmailLogController::class, 'show']);
+    Route::put('/email-logs/{emailLog}', [EmailLogController::class, 'update']);
+    Route::delete('/email-logs/{emailLog}', [EmailLogController::class, 'destroy']);
 
     Route::get('/emails/template', [EmailController::class, 'template']);
     Route::post('/emails/preview', [EmailController::class, 'preview']);

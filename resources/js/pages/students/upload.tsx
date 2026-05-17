@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Upload, FileSpreadsheet, Loader2, Download, Send, CheckCircle2, XCircle, Clock, AlertCircle, Pencil } from 'lucide-react'
+import EmailStatusTable from '@/components/students/email-status-table'
+import UnsentStudentsTable from '@/components/students/unsent-students-table'
+import { Upload, FileSpreadsheet, Info, Loader2, Download, Send, CheckCircle2, XCircle, Clock, AlertCircle, Pencil } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -41,6 +43,7 @@ export default function CsvUpload() {
   const [imported, setImported] = useState<number | null>(null)
   const [sending, setSending] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
   const [templateSubject, setTemplateSubject] = useState('')
   const [templateBody, setTemplateBody] = useState('')
@@ -270,13 +273,13 @@ export default function CsvUpload() {
       <div className="flex flex-col gap-6 p-4">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold">CSV Upload</h1>
+            <h1 className="text-xl font-semibold">Send All Emails</h1>
             <p className="text-sm text-muted-foreground">
               Import students from a CSV file with columns: student_number, email
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={openTemplateDialog}>
+            <Button variant="outline" onClick={openTemplateDialog}>
               <Pencil className="size-4" />
               Customize Template
             </Button>
@@ -312,108 +315,128 @@ export default function CsvUpload() {
           </DialogContent>
         </Dialog>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Send className="size-4" />
-              Send All Emails
-            </CardTitle>
-            <CardDescription>
-              Send onboarding emails to all students who haven't received one yet
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <CheckCircle2 className="size-5 text-green-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Sent</p>
-                  <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
-                </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div
+            className="flex items-center justify-between gap-3 p-3 border rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setSelectedStatus(selectedStatus === 'sent' ? null : 'sent')}
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">Sent</p>
+              <p className="text-lg font-semibold">{stats?.sent ?? '—'}</p>
+            </div>
+            <CheckCircle2 className="size-5 text-green-500 shrink-0" />
+          </div>
+          <div
+            className="flex items-center justify-between gap-3 p-3 border rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setSelectedStatus(selectedStatus === 'unsent' ? null : 'unsent')}
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">Unsent</p>
+              <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
+            </div>
+            <Send className="size-5 text-orange-500 shrink-0" />
+          </div>
+          <div
+            className="flex items-center justify-between gap-3 p-3 border rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setSelectedStatus(selectedStatus === 'pending' ? null : 'pending')}
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">Pending</p>
+              <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
+            </div>
+            <Clock className="size-5 text-yellow-500 shrink-0" />
+          </div>
+          <div
+            className="flex items-center justify-between gap-3 p-3 border rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setSelectedStatus(selectedStatus === 'failed' ? null : 'failed')}
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">Failed</p>
+              <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
+            </div>
+            <XCircle className="size-5 text-red-500 shrink-0" />
+          </div>
+        </div>
+
+        <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Customize Email Template</DialogTitle>
+              <DialogDescription>
+                Edit the subject and body used for bulk emails. Use {'{student_number}'} as a placeholder.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="template-subject">Subject</Label>
+                <Input
+                  id="template-subject"
+                  value={editSubject}
+                  onChange={e => setEditSubject(e.target.value)}
+                  placeholder="Student Number: {student_number}"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
               </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <Send className="size-5 text-orange-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Unsent</p>
-                  <p className="text-lg font-semibold">{stats?.unsent ?? '—'}</p>
-                </div>
+              <div>
+                <Label htmlFor="template-body">Body</Label>
+                <textarea
+                  id="template-body"
+                  className="flex min-h-[250px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={editBody}
+                  onChange={e => setEditBody(e.target.value)}
+                  placeholder="Enter email body..."
+                />
+                <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
               </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <Clock className="size-5 text-yellow-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pending</p>
-                  <p className="text-lg font-semibold">{stats?.pending ?? '—'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-md">
-                <XCircle className="size-5 text-red-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Failed</p>
-                  <p className="text-lg font-semibold">{stats?.failed ?? '—'}</p>
+              <div className="flex items-center justify-between">
+                <Button variant="outline" size="sm" onClick={handleResetDefault}>Reset to Default</Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
+                  <Button size="sm" onClick={handleSaveTemplate}>Save</Button>
                 </div>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
 
-            <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-              <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Customize Email Template</DialogTitle>
-                  <DialogDescription>
-                    Edit the subject and body used for bulk emails. Use {'{student_number}'} as a placeholder.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="template-subject">Subject</Label>
-                    <Input
-                      id="template-subject"
-                      value={editSubject}
-                      onChange={e => setEditSubject(e.target.value)}
-                      placeholder="Student Number: {student_number}"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
-                  </div>
-                  <div>
-                    <Label htmlFor="template-body">Body</Label>
-                    <textarea
-                      id="template-body"
-                      className="flex min-h-[250px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={editBody}
-                      onChange={e => setEditBody(e.target.value)}
-                      placeholder="Enter email body..."
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Button variant="outline" size="sm" onClick={handleResetDefault}>Reset to Default</Button>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
-                      <Button size="sm" onClick={handleSaveTemplate}>Save</Button>
-                    </div>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+        <div className="flex justify-between items-center">
+          {!stats?.total_students && (
+              <p className="flex gap-2 items-center text-sm text-orange-600">
+              <Info  className='w-4 h-4'/>No students found. Upload a CSV first.
+            </p>
+          )}
+          {stats && stats.total_students > 0 && !stats.unsent && (
+            <p className="flex gap-2 items-center text-sm text-green-600">
+              <Info  className='w-4 h-4'/>All students have already received their emails.
+            </p>
+          )}
 
-            <div className="flex justify-end items-center gap-3">
-              <Button onClick={handleSendAll} disabled={sending || !stats?.unsent}>
-                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                {sending ? 'Sending...' : 'Send All Emails'}
-              </Button>
-            </div>
+          <div className="flex justify-end items-center gap-3">
+            <Button onClick={handleSendAll} disabled={sending || !stats?.unsent}>
+              {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              {sending ? 'Sending...' : 'Send All Emails'}
+            </Button>
+          </div>
+        </div>
 
-            {!stats?.total_students && (
-              <p className="text-sm text-muted-foreground">
-                No students found. Upload a CSV first.
-              </p>
-            )}
-            {stats && stats.total_students > 0 && !stats.unsent && (
-              <p className="text-sm text-muted-foreground">
-                All students have already received their emails.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {selectedStatus === 'unsent' && (
+          <div className="flex flex-col gap-2">
+            <UnsentStudentsTable
+              onClose={() => setSelectedStatus(null)}
+              onUpdated={fetchStats}
+            />
+          </div>
+        )}
+        {selectedStatus && selectedStatus !== 'unsent' && (
+          <div className="flex flex-col gap-2">
+            <EmailStatusTable
+              status={selectedStatus}
+              onClose={() => setSelectedStatus(null)}
+              onUpdated={fetchStats}
+            />
+          </div>
+        )}
 
         {preview.length > 0 && (
           <Card>

@@ -38,9 +38,9 @@ const mainNavItems: NavItem[] = [
 
 const studentNavItems: NavItem[] = [
     {
-        title: 'CSV Upload',
+        title: 'Send Email',
         href: '/students/upload',
-        icon: Upload,
+        icon: Send,
     },
     {
         title: 'Manual Email',
