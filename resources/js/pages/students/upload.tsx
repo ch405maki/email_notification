@@ -304,13 +304,19 @@ export default function CsvUpload() {
 
         <div className="flex justify-between items-center">
           {!stats?.total_students && (
-              <p className="flex gap-2 items-center text-sm text-orange-600">
+              <p className="flex gap-2 items-center text-sm text-red-600">
               <Info  className='w-4 h-4'/>No students found. Upload a CSV first.
             </p>
           )}
           {stats && stats.total_students > 0 && !stats.unsent && (
             <p className="flex gap-2 items-center text-sm text-green-600">
               <Info  className='w-4 h-4'/>All students have already received their emails.
+            </p>
+          )}
+          {stats && stats.total_students > 0 && stats.unsent && (
+            <p className="flex gap-2 items-center text-sm text-orange-600">
+              <Info className='w-4 h-4' />
+              There are imported students who have not yet received an email.
             </p>
           )}
 

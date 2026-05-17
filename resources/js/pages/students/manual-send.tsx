@@ -56,7 +56,9 @@ export default function ManualSend() {
       })
       setPreview(res.data.data)
     } catch { /* ignore */ }
-    finally { setLoadingPreview(false) }
+    finally { 
+      await new Promise(r => setTimeout(r, 800))
+      setLoadingPreview(false) }
   }, [fetchTemplate])
 
   useEffect(() => {
@@ -142,7 +144,7 @@ export default function ManualSend() {
                 <div className="flex justify-end">
                   <Button onClick={handleSend} disabled={!canPreview || sending}>
                     {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                    Send Email
+                    {sending ? 'Sending...' : 'Send Email'}
                   </Button>
                 </div>
 
