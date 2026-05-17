@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
-import { RefreshCw, Mail, Search, CheckCircle2, XCircle, Clock, Eye } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import { RefreshCw, Mail, Search, CheckCircle2, XCircle, Clock } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -164,7 +165,7 @@ export default function Logs() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {log.sent_at ? new Date(log.sent_at).toLocaleString() : '—'}
+                    {formatDate(log.sent_at)}
                   </TableCell>
                   <TableCell className="max-w-40 truncate text-sm text-red-500">
                     {log.error_message || '—'}

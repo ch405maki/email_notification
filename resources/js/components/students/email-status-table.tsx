@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { RefreshCw, CheckCircle2, XCircle, Clock, Pencil, Trash2, Mail, X, Loader2 } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
+import { RefreshCw, Search, CheckCircle2, XCircle, Clock, Pencil, Trash2, Mail, X, Loader2 } from 'lucide-react'
 
 type EmailLog = {
   id: number
@@ -55,6 +57,7 @@ interface Props {
 export default function EmailStatusTable({ status, onClose, onUpdated }: Props) {
   const [logs, setLogs] = useState<PaginatedResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<EmailLog | null>(null)
@@ -71,6 +74,7 @@ export default function EmailStatusTable({ status, onClose, onUpdated }: Props) 
     try {
       const params: Record<string, string | number> = { page }
       if (status) params.status = status
+      if (search) params.search = search
       const res = await axios.get('/api/v1/email-logs', { params })
       setLogs(res.data.data)
     } catch {
@@ -78,7 +82,12 @@ export default function EmailStatusTable({ status, onClose, onUpdated }: Props) 
     } finally {
       setLoading(false)
     }
-  }, [status])
+  }, [status, search])
+
+  useEffect(() => {
+    const timer = setTimeout(() => fetchLogs(), 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
   useEffect(() => {
     fetchLogs()
@@ -150,6 +159,15 @@ export default function EmailStatusTable({ status, onClose, onUpdated }: Props) 
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-7 h-8 w-60"
+            />
+          </div>
           <Button variant="outline" size="sm" onClick={() => fetchLogs()}>
             <RefreshCw className="size-3.5" />
           </Button>
@@ -200,8 +218,8 @@ export default function EmailStatusTable({ status, onClose, onUpdated }: Props) 
                   </span>
                 </Badge>
               </TableCell>
-              <TableCell className="text-sm">
-                {log.sent_at ? new Date(log.sent_at).toLocaleString() : '—'}
+              <TableCell className="text-sm whitespace-nowrap">
+                {formatDate(log.sent_at)}
               </TableCell>
               <TableCell className="max-w-40 truncate text-sm text-red-500">
                 {log.error_message || '—'}

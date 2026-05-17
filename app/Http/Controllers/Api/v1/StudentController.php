@@ -130,8 +130,17 @@ class StudentController extends Controller
 
     public function unsent(Request $request)
     {
-        $students = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'))
-            ->paginate(10);
+        $query = Student::whereDoesntHave('emailLogs', fn ($q) => $q->where('status', 'sent'));
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('student_number', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $students = $query->paginate(10);
 
         return response()->json(['data' => $students]);
     }

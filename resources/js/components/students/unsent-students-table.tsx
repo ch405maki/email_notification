@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { RefreshCw, Pencil, Trash2, Send, Users, X, Loader2 } from 'lucide-react'
+import { RefreshCw, Search, Pencil, Trash2, Send, Users, X, Loader2 } from 'lucide-react'
 
 type UnsentStudent = {
   id: number
@@ -31,6 +31,7 @@ interface Props {
 export default function UnsentStudentsTable({ onClose, onUpdated }: Props) {
   const [students, setStudents] = useState<PaginatedResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingStudent, setDeletingStudent] = useState<UnsentStudent | null>(null)
@@ -47,14 +48,21 @@ export default function UnsentStudentsTable({ onClose, onUpdated }: Props) {
   const fetchStudents = useCallback(async (page = 1) => {
     setLoading(true)
     try {
-      const res = await axios.get('/api/v1/students/unsent', { params: { page } })
+      const params: Record<string, string | number> = { page }
+      if (search) params.search = search
+      const res = await axios.get('/api/v1/students/unsent', { params })
       setStudents(res.data.data)
     } catch {
       toast.error('Failed to fetch unsent students')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [search])
+
+  useEffect(() => {
+    const timer = setTimeout(() => fetchStudents(), 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
   useEffect(() => {
     fetchStudents()
@@ -143,6 +151,15 @@ export default function UnsentStudentsTable({ onClose, onUpdated }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="size-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-7 h-8 w-60"
+            />
+          </div>
           <Button variant="outline" size="sm" onClick={() => fetchStudents()}>
             <RefreshCw className="size-3.5" />
           </Button>
