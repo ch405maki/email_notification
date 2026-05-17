@@ -313,7 +313,7 @@ export default function CsvUpload() {
               <Info  className='w-4 h-4'/>All students have already received their emails.
             </p>
           )}
-          {stats && stats.total_students > 0 && stats.unsent && (
+          {stats && stats.total_students > 0 && stats.unsent > 0 && (
             <p className="flex gap-2 items-center text-sm text-orange-600">
               <Info className='w-4 h-4' />
               There are imported students who have not yet received an email.
