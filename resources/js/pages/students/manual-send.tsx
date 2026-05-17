@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import AppLayout from '@/layouts/app-layout'
 import { Head } from '@inertiajs/react'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { Send, Eye, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 
@@ -23,22 +24,48 @@ export default function ManualSend() {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<{ success: boolean; message: string } | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  const handlePreview = async () => {
-    if (!studentNumber || !email) return
+  const fetchTemplate = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/v1/emails/template')
+      setPreview(res.data.data)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    fetchTemplate()
+  }, [fetchTemplate])
+
+  useEffect(() => {
+    if (preview && iframeRef.current) {
+      iframeRef.current.srcdoc = preview.body
+    }
+  }, [preview])
+
+  const autoPreview = useCallback(async (sn: string, em: string) => {
+    if (!sn || !em) {
+      fetchTemplate()
+      return
+    }
     setLoadingPreview(true)
-    setSent(null)
     try {
       const res = await axios.post('/api/v1/emails/preview', {
-        student_number: studentNumber,
-        email,
+        student_number: sn,
+        email: em,
       })
       setPreview(res.data.data)
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to generate preview')
-    } finally {
-      setLoadingPreview(false)
-    }
+    } catch { /* ignore */ }
+    finally { setLoadingPreview(false) }
+  }, [fetchTemplate])
+
+  useEffect(() => {
+    const timer = setTimeout(() => autoPreview(studentNumber, email), 400)
+    return () => clearTimeout(timer)
+  }, [studentNumber, email, autoPreview])
+
+  const handlePreview = () => {
+    autoPreview(studentNumber, email)
   }
 
   const handleSend = async () => {
@@ -75,86 +102,86 @@ export default function ManualSend() {
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Send className="size-4" />
-              Compose Email
-            </CardTitle>
-            <CardDescription>
-              Enter the student number and email address, then preview before sending
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <Label htmlFor="student-number">Student Number</Label>
-                <Input
-                  id="student-number"
-                  placeholder="2026-0026"
-                  value={studentNumber}
-                  onChange={e => setStudentNumber(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="student@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="flex flex-col gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Send className="size-4" />
+                  Compose Email
+                </CardTitle>
+                <CardDescription>
+                  Enter the student number and email address, then preview before sending
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="student-number">Student Number</Label>
+                    <Input
+                      id="student-number"
+                      placeholder="2026-0026"
+                      value={studentNumber}
+                      onChange={e => setStudentNumber(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="student@example.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={handlePreview} disabled={!canPreview || loadingPreview}>
-                {loadingPreview ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
-                Preview
-              </Button>
-              <Button onClick={handleSend} disabled={!canPreview || sending}>
-                {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                Send Email
-              </Button>
-            </div>
+                <Separator />
 
-            {sent && (
-              <div className="flex items-center gap-2">
-                <Badge variant={sent.success ? 'default' : 'destructive'} className={sent.success ? 'bg-green-500' : ''}>
-                  {sent.success ? <CheckCircle2 className="size-3.5 mr-1" /> : <XCircle className="size-3.5 mr-1" />}
-                  {sent.message}
-                </Badge>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                <div className="flex justify-end">
+                  <Button onClick={handleSend} disabled={!canPreview || sending}>
+                    {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    Send Email
+                  </Button>
+                </div>
 
-        {preview && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Eye className="size-4" />
-                Email Preview
-              </CardTitle>
-              <CardDescription>
-                This is how the email will appear to the recipient
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Subject</Label>
-                <p className="font-medium">{preview.subject}</p>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Body</Label>
-                <pre className="whitespace-pre-wrap font-sans text-sm bg-muted p-4 rounded-md border">
-                  {preview.body}
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                {sent && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant={sent.success ? 'default' : 'destructive'} className={sent.success ? 'bg-green-500' : ''}>
+                      {sent.success ? <CheckCircle2 className="size-3.5 mr-1" /> : <XCircle className="size-3.5 mr-1" />}
+                      {sent.message}
+                    </Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            <Card className="flex-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Eye className="size-4" />
+                  Email Preview
+                </CardTitle>
+                <CardDescription>
+                  {preview?.subject || 'Loading preview...'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-md overflow-hidden bg-white">
+                  <iframe
+                    ref={iframeRef}
+                    title="Email Preview"
+                    className="w-full min-h-[500px]"
+                    sandbox="allow-same-origin allow-scripts"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </AppLayout>
   )

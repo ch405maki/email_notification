@@ -5,10 +5,11 @@ import { Head, Link } from '@inertiajs/react'
 import { type BreadcrumbItem } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
-import { RefreshCw, Mail, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { RefreshCw, Mail, Search, CheckCircle2, XCircle, Clock, Eye } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -48,6 +49,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 export default function Logs() {
   const [logs, setLogs] = useState<PaginatedResponse | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
   const fetchLogs = useCallback(async (page = 1) => {
@@ -55,6 +57,7 @@ export default function Logs() {
     try {
       const params: Record<string, string | number> = { page }
       if (statusFilter) params.status = statusFilter
+      if (search) params.search = search
       const res = await axios.get('/api/v1/email-logs', { params })
       setLogs(res.data.data)
     } catch (error: any) {
@@ -62,6 +65,15 @@ export default function Logs() {
     } finally {
       setLoading(false)
     }
+  }, [statusFilter, search])
+
+  useEffect(() => {
+    const timer = setTimeout(() => fetchLogs(), 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    fetchLogs()
   }, [statusFilter])
 
   useEffect(() => {
@@ -99,11 +111,15 @@ export default function Logs() {
             </SelectContent>
           </Select>
 
-          {logs && (
-            <span className="text-sm text-muted-foreground ml-auto">
-              {logs.total} total
-            </span>
-          )}
+          <div className="relative">
+            <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-8 w-72"
+            />
+          </div>
         </div>
 
         <div className="border rounded-md">

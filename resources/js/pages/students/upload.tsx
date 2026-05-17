@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import EmailStatusTable from '@/components/students/email-status-table'
 import UnsentStudentsTable from '@/components/students/unsent-students-table'
-import { Upload, FileSpreadsheet, Info, Loader2, Download, Send, CheckCircle2, XCircle, Clock, AlertCircle, Pencil } from 'lucide-react'
+import { Upload, FileSpreadsheet, Info, Loader2, Download, Send, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -44,64 +44,7 @@ export default function CsvUpload() {
   const [sending, setSending] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
-  const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
-  const [templateSubject, setTemplateSubject] = useState('')
-  const [templateBody, setTemplateBody] = useState('')
-  const [editSubject, setEditSubject] = useState('')
-  const [editBody, setEditBody] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
-
-  const loadFromStorage = useCallback(() => {
-    try {
-      const saved = localStorage.getItem('email_template')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.subject && parsed.body) {
-          setTemplateSubject(parsed.subject)
-          setTemplateBody(parsed.body)
-          return true
-        }
-      }
-    } catch { /* ignore */ }
-    return false
-  }, [])
-
-  const fetchTemplate = useCallback(async () => {
-    if (loadFromStorage()) return
-    try {
-      const res = await axios.get('/api/v1/emails/template')
-      setTemplateSubject(res.data.data.subject)
-      setTemplateBody(res.data.data.body)
-    } catch { /* use defaults */ }
-  }, [loadFromStorage])
-
-  useEffect(() => { fetchTemplate() }, [fetchTemplate])
-
-  const handleSaveTemplate = () => {
-    setTemplateSubject(editSubject)
-    setTemplateBody(editBody)
-    try {
-      localStorage.setItem('email_template', JSON.stringify({ subject: editSubject, body: editBody }))
-    } catch { /* storage full */ }
-    setTemplateDialogOpen(false)
-  }
-
-  const handleResetDefault = async () => {
-    try {
-      localStorage.removeItem('email_template')
-      const res = await axios.get('/api/v1/emails/template')
-      setEditSubject(res.data.data.subject)
-      setEditBody(res.data.data.body)
-      setTemplateSubject(res.data.data.subject)
-      setTemplateBody(res.data.data.body)
-    } catch { /* use defaults */ }
-  }
-
-  const openTemplateDialog = () => {
-    setEditSubject(templateSubject)
-    setEditBody(templateBody)
-    setTemplateDialogOpen(true)
-  }
 
   const fetchStats = useCallback(async () => {
     try {
@@ -229,8 +172,12 @@ export default function CsvUpload() {
     setSending(true)
     try {
       const payload: Record<string, unknown> = { sync: true }
-      if (templateSubject) payload.subject = templateSubject
-      if (templateBody) payload.body = templateBody
+      const saved = localStorage.getItem('email_template')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.subject) payload.subject = parsed.subject
+        if (parsed.body) payload.body = parsed.body
+      }
       const res = await axios.post('/api/v1/students/send-bulk', payload)
       toast.success(res.data.message)
       fetchStats()
@@ -279,10 +226,6 @@ export default function CsvUpload() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={openTemplateDialog}>
-              <Pencil className="size-4" />
-              Customize Template
-            </Button>
             <Button variant="outline" onClick={handleDownload} disabled={downloading}>
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Template
@@ -358,47 +301,6 @@ export default function CsvUpload() {
             <XCircle className="size-5 text-red-500 shrink-0" />
           </div>
         </div>
-
-        <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Customize Email Template</DialogTitle>
-              <DialogDescription>
-                Edit the subject and body used for bulk emails. Use {'{student_number}'} as a placeholder.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="template-subject">Subject</Label>
-                <Input
-                  id="template-subject"
-                  value={editSubject}
-                  onChange={e => setEditSubject(e.target.value)}
-                  placeholder="Student Number: {student_number}"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder</p>
-              </div>
-              <div>
-                <Label htmlFor="template-body">Body</Label>
-                <textarea
-                  id="template-body"
-                  className="flex min-h-[250px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  value={editBody}
-                  onChange={e => setEditBody(e.target.value)}
-                  placeholder="Enter email body..."
-                />
-                <p className="text-xs text-muted-foreground mt-1">Use {'{student_number}'} as placeholder — it will be replaced per student</p>
-              </div>
-              <div className="flex items-center justify-between">
-                <Button variant="outline" size="sm" onClick={handleResetDefault}>Reset to Default</Button>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
-                  <Button size="sm" onClick={handleSaveTemplate}>Save</Button>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         <div className="flex justify-between items-center">
           {!stats?.total_students && (

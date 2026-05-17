@@ -15,4 +15,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('students/manual-send', function () {
         return Inertia::render('students/manual-send');
     })->name('students.manual-send');
+
+    Route::get('students/template', function () {
+        return Inertia::render('students/template');
+    })->name('students.template');
 });

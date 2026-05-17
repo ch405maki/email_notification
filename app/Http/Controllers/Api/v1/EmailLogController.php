@@ -16,6 +16,15 @@ class EmailLogController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('student_number', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('subject', 'like', "%{$search}%");
+            });
+        }
+
         return response()->json([
             'data' => $query->paginate(10),
         ]);

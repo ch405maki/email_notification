@@ -19,7 +19,7 @@ import {
 import { resolveUrl } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, UserRoundCog, Upload, Send, Mail, PenLine } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, UserRoundCog, Upload, Send, Mail, PenLine, FileText } from 'lucide-react';
 import AppLogo from './app-logo';
 import { type SharedData } from '@/types';
 
@@ -46,6 +46,11 @@ const studentNavItems: NavItem[] = [
         title: 'Manual Email',
         href: '/students/manual-send',
         icon: PenLine,
+    },
+    {
+        title: 'Email Template',
+        href: '/students/template',
+        icon: FileText,
     },
     {
         title: 'Email Logs',
