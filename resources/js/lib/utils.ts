@@ -28,3 +28,12 @@ export function formatDate(dateStr: string | null): string {
         hour12: true,
     } as Intl.DateTimeFormatOptions)
 }
+
+export function formatDateShort(dateStr: string | null): string {
+    if (!dateStr) return '—'
+    return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+    } as Intl.DateTimeFormatOptions)
+}
