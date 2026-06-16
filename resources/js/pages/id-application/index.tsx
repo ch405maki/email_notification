@@ -140,14 +140,33 @@ export default function IdApplication() {
   }, [fetchApplications])
 
   const copyToClipboard = useCallback(async (value: string, field: string) => {
+    const fallback = () => {
+      const el = document.createElement('textarea')
+      el.value = value
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      try {
+        document.execCommand('copy')
+        document.body.removeChild(el)
+        return true
+      } catch {
+        document.body.removeChild(el)
+        return false
+      }
+    }
     try {
       await navigator.clipboard.writeText(value)
-      setCopiedField(field)
-      toast.success('Copied')
-      setTimeout(() => setCopiedField(null), 1500)
     } catch {
-      toast.error('Failed to copy')
+      if (!fallback()) {
+        toast.error('Failed to copy')
+        return
+      }
     }
+    setCopiedField(field)
+    toast.success('Copied')
+    setTimeout(() => setCopiedField(null), 1500)
   }, [])
 
   useEffect(() => {
