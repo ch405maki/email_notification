@@ -30,6 +30,8 @@ const API_KEY = '12345'
 const api = axios.create({
   baseURL: API_BASE,
   withCredentials: false,
+  xsrfHeaderName: null,
+  xsrfCookieName: null,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -85,7 +87,7 @@ export default function IdApplication() {
   const [searchQuery, setSearchQuery]   = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusTab, setStatusTab]       = useState('pending')
-  const [selectedIds, setSelectedIds]   = useState<string[]>([])
+  const [selectedIds, setSelectedIds]   = useState<number[]>([])
   const [deleteOpen, setDeleteOpen]     = useState(false)
   const [deleting, setDeleting]         = useState(false)
   const [editingIdNo, setEditingIdNo]   = useState('')
@@ -192,17 +194,17 @@ export default function IdApplication() {
     }
   }, [])
 
-  const toggleSelect = (id_no: string) => {
+  const toggleSelect = (id: number) => {
     setSelectedIds(prev =>
-      prev.includes(id_no) ? prev.filter(id => id !== id_no) : [...prev, id_no]
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     )
   }
 
   const toggleSelectAll = () => {
     setSelectedIds(
-      selectedIds.length === filtered.length
+      filtered.length > 0 && selectedIds.length === filtered.length
         ? []
-        : filtered.map(a => a.id_no ?? '').filter(Boolean)
+        : filtered.map(app => app.id).filter(Boolean)
     )
   }
 
@@ -210,7 +212,7 @@ export default function IdApplication() {
     setDeleting(true)
     try {
       await api.delete('/id-applications', {
-        params: { 'id_no[]': selectedIds, api_key: API_KEY },
+        params: { ids: selectedIds, api_key: API_KEY },
       })
       toast.success(`Deleted ${selectedIds.length} application(s)`)
       setSelectedIds([])
@@ -333,9 +335,9 @@ export default function IdApplication() {
                     <TableRow key={rowKey}>
                       <TableCell>
                         <Checkbox
-                          checked={selectedIds.includes(app.id_no ?? '')}
-                          onCheckedChange={() => toggleSelect(app.id_no ?? '')}
-                          aria-label={`Select ${app.id_no}`}
+                          checked={selectedIds.includes(app.id)}
+                          onCheckedChange={() => toggleSelect(app.id)}
+                          aria-label={`Select ${app.id_no ?? 'row ' + i}`}
                         />
                       </TableCell>
                       {renderCopyCell(app.id_no, `id-${rowKey}`)}
@@ -490,7 +492,7 @@ export default function IdApplication() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filtered.map(app => (
+                        filtered.map((app, i) => (
                           <TableRow
                             key={app.id}
                             className={`cursor-pointer ${selected?.id === app.id ? 'bg-green-50 dark:bg-green-950' : 'hover:bg-muted/50'}`}
@@ -498,9 +500,9 @@ export default function IdApplication() {
                           >
                             <TableCell onClick={e => e.stopPropagation()}>
                               <Checkbox
-                                checked={selectedIds.includes(app.id_no ?? '')}
-                                onCheckedChange={() => toggleSelect(app.id_no ?? '')}
-                                aria-label={`Select ${app.id_no}`}
+                                checked={selectedIds.includes(app.id)}
+                                onCheckedChange={() => toggleSelect(app.id)}
+                                aria-label={`Select ${app.id_no ?? 'row ' + i}`}
                               />
                             </TableCell>
                             <TableCell className={`text-start font-mono font-medium ${!app.id_no ? 'text-destructive' : ''}`}>
