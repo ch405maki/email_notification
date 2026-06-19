@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserRoundPen, UserRoundX } from 'lucide-react'
 import {
@@ -12,8 +13,8 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog'
 
-type Role = { id: number; name: string }
-type User = { id: number; name: string; email: string; role: Role }
+type Module = { id: number; name: string; slug: string }
+type User = { id: number; name: string; email: string; status: boolean; role: { id: number; name: string }; modules: Module[] }
 
 interface Props {
   users: User[]
@@ -46,6 +47,8 @@ export default function UserTable({ users, onEdit, onDelete }: Props) {
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Modules</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -55,6 +58,18 @@ export default function UserTable({ users, onEdit, onDelete }: Props) {
               <TableCell>{user.name}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>{user.role.name}</TableCell>
+              <TableCell>
+                <Badge variant={user.status ? 'default' : 'destructive'}>
+                  {user.status ? 'Active' : 'Inactive'}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {user.modules.map((m) => (
+                    <Badge key={m.id} variant="secondary">{m.name}</Badge>
+                  ))}
+                </div>
+              </TableCell>
               <TableCell className="text-right space-x-2">
                 <Button variant="ghost" size="icon" onClick={() => onEdit(user)}>
                   <UserRoundPen />
@@ -68,7 +83,6 @@ export default function UserTable({ users, onEdit, onDelete }: Props) {
         </TableBody>
       </Table>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

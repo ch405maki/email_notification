@@ -23,7 +23,7 @@ import { BookOpen, Folder, LayoutGrid, UserRoundCog, Upload, Send, Mail, PenLine
 import AppLogo from './app-logo';
 import { type SharedData } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const allMainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -81,7 +81,15 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const page = usePage();
+    const page = usePage<SharedData>();
+    const user = page.props.auth.user;
+    const isAdmin = user.role?.slug === 'admin';
+    const userModules = user.modules ?? [];
+
+    const hasModule = (slug: string) => isAdmin || userModules.includes(slug);
+
+    const mainNavItems = isAdmin ? allMainNavItems : allMainNavItems.filter(i => i.title !== 'User Management');
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -99,45 +107,49 @@ export function AppSidebar() {
             <SidebarContent>
                 <NavMain items={mainNavItems} />
 
-                <SidebarGroup className="px-2 py-0">
-                    <SidebarGroupLabel>Students</SidebarGroupLabel>
-                    <SidebarMenu>
-                        {studentNavItems.map((item) => (
-                            <SidebarMenuItem key={item.title}>
-                                <SidebarMenuButton
-                                    asChild
-                                    isActive={page.url.startsWith(resolveUrl(item.href))}
-                                    tooltip={{ children: item.title }}
-                                >
-                                    <Link href={item.href} prefetch>
-                                        {item.icon && <item.icon />}
-                                        <span>{item.title}</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        ))}
-                    </SidebarMenu>
-                </SidebarGroup>
+                {hasModule('email') && (
+                    <SidebarGroup className="px-2 py-0">
+                        <SidebarGroupLabel>Students</SidebarGroupLabel>
+                        <SidebarMenu>
+                            {studentNavItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={page.url.startsWith(resolveUrl(item.href))}
+                                        tooltip={{ children: item.title }}
+                                    >
+                                        <Link href={item.href} prefetch>
+                                            {item.icon && <item.icon />}
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                )}
 
-                <SidebarGroup className="px-2 py-0">
-                    <SidebarGroupLabel>ID Application</SidebarGroupLabel>
-                    <SidebarMenu>
-                        {idAppNavItems.map((item) => (
-                            <SidebarMenuItem key={item.title}>
-                                <SidebarMenuButton
-                                    asChild
-                                    isActive={page.url.startsWith(resolveUrl(item.href))}
-                                    tooltip={{ children: item.title }}
-                                >
-                                    <Link href={item.href} prefetch>
-                                        {item.icon && <item.icon />}
-                                        <span>{item.title}</span>
-                                    </Link>
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        ))}
-                    </SidebarMenu>
-                </SidebarGroup>
+                {hasModule('id-application') && (
+                    <SidebarGroup className="px-2 py-0">
+                        <SidebarGroupLabel>ID Application</SidebarGroupLabel>
+                        <SidebarMenu>
+                            {idAppNavItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={page.url.startsWith(resolveUrl(item.href))}
+                                        tooltip={{ children: item.title }}
+                                    >
+                                        <Link href={item.href} prefetch>
+                                            {item.icon && <item.icon />}
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                )}
             </SidebarContent>
 
             <SidebarFooter>

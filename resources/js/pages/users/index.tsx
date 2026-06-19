@@ -6,6 +6,13 @@ import { dashboard } from '@/routes'
 import { type BreadcrumbItem } from '@/types'
 import UserTable from '@/components/users/userTable'
 import UserForm from '@/components/users/userForm'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { toast } from 'sonner'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -13,18 +20,25 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'User Management', href: '#' },
 ]
 
-type Role = { id: number; name: string }
-type User = { id: number; name: string; email: string; role: Role }
+type Role = { id: number; name: string; slug: string }
+type Module = { id: number; name: string; slug: string }
+type User = { id: number; name: string; email: string; status: boolean; role: Role; modules: Module[] }
 
 export default function UserIndex() {
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
+  const [allModules, setAllModules] = useState<Module[]>([])
   const [openForm, setOpenForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | undefined>()
+  const [roleFilter, setRoleFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('/api/v1/users')
+      const params: Record<string, string> = {}
+      if (roleFilter) params.role_id = roleFilter
+      if (statusFilter !== '') params.status = statusFilter
+      const res = await axios.get('/api/v1/users', { params })
       setUsers(res.data.data)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to fetch users')
@@ -40,14 +54,25 @@ export default function UserIndex() {
     }
   }
 
+  const fetchModules = async () => {
+    try {
+      const res = await axios.get('/api/v1/modules')
+      setAllModules(res.data.data)
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to fetch modules')
+    }
+  }
+
   useEffect(() => {
-    fetchUsers()
     fetchRoles()
+    fetchModules()
   }, [])
 
-  // Delete user
+  useEffect(() => {
+    fetchUsers()
+  }, [roleFilter, statusFilter])
+
   const handleDelete = async (user: User) => {
-    if (!confirm('Delete this user?')) return
     try {
       await axios.delete(`/api/v1/users/${user.id}`)
       toast.success('User deleted successfully')
@@ -57,7 +82,6 @@ export default function UserIndex() {
     }
   }
 
-  // Edit user
   const handleEdit = (user: User) => {
     setEditingUser(user)
     setOpenForm(true)
@@ -68,7 +92,6 @@ export default function UserIndex() {
       <Head title="User Management" />
 
       <div className="flex flex-col gap-4 p-4">
-        {/* Header: Title + Subtitle + Add Button */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Users</h1>
@@ -82,6 +105,7 @@ export default function UserIndex() {
             setOpen={setOpenForm}
             user={editingUser}
             roles={roles}
+            allModules={allModules}
             onSaved={() => {
               setEditingUser(undefined)
               fetchUsers()
@@ -90,7 +114,34 @@ export default function UserIndex() {
           />
         </div>
 
-        {/* Users Table */}
+        <div className="flex gap-4">
+          <div className="w-48">
+            <Select value={roleFilter} onValueChange={v => setRoleFilter(v === 'all' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {roles.map(role => (
+                  <SelectItem key={role.id} value={String(role.id)}>{role.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-48">
+            <Select value={statusFilter} onValueChange={v => setStatusFilter(v === 'all' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="1">Active</SelectItem>
+                <SelectItem value="0">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         <UserTable users={users} onEdit={handleEdit} onDelete={handleDelete} />
       </div>
     </AppLayout>

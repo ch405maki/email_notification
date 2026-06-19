@@ -10,19 +10,23 @@ use Illuminate\Support\Facades\Hash;
 
 class UsersController extends Controller
 {
-    /**
-     * GET /api/v1/users
-     */
-    public function index()
+    public function index(Request $request)
     {
+        $query = User::with('role', 'modules');
+
+        if ($request->filled('role_id')) {
+            $query->where('role_id', $request->role_id);
+        }
+
+        if ($request->has('status') && $request->status !== '') {
+            $query->where('status', $request->boolean('status'));
+        }
+
         return response()->json([
-            'data' => User::with('role')->latest()->get(),
+            'data' => $query->latest()->get(),
         ]);
     }
 
-    /**
-     * POST /api/v1/users
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -30,6 +34,9 @@ class UsersController extends Controller
             'email'    => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'min:6'],
             'role_id'  => ['required', 'exists:roles,id'],
+            'status'   => ['boolean'],
+            'modules'  => ['nullable', 'array'],
+            'modules.*' => ['exists:modules,id'],
         ]);
 
         $user = User::create([
@@ -37,11 +44,16 @@ class UsersController extends Controller
             'email'    => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role_id'  => $validated['role_id'],
+            'status'   => $validated['status'] ?? true,
         ]);
+
+        if (!empty($validated['modules'])) {
+            $user->modules()->sync($validated['modules']);
+        }
 
         return response()->json([
             'message' => 'User created successfully',
-            'data'    => $user->load('role'),
+            'data'    => $user->load('role', 'modules'),
         ], 201);
     }
 
@@ -52,11 +64,18 @@ class UsersController extends Controller
             'email'    => ['required', 'email', 'unique:users,email,' . $user->id],
             'password' => ['nullable', 'min:6'],
             'role_id'  => ['required', 'exists:roles,id'],
+            'status'   => ['boolean'],
+            'modules'  => ['nullable', 'array'],
+            'modules.*' => ['exists:modules,id'],
         ]);
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->role_id = $validated['role_id'];
+
+        if (isset($validated['status'])) {
+            $user->status = $validated['status'];
+        }
 
         if (!empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
@@ -64,15 +83,16 @@ class UsersController extends Controller
 
         $user->save();
 
+        if (array_key_exists('modules', $validated)) {
+            $user->modules()->sync($validated['modules'] ?? []);
+        }
+
         return response()->json([
             'message' => 'User updated successfully',
-            'data'    => $user->load('role'),
+            'data'    => $user->load('role', 'modules'),
         ]);
     }
 
-    /**
-     * DELETE /api/v1/users/{id}
-     */
     public function destroy(User $user)
     {
         $user->delete();

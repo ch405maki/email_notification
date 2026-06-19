@@ -56,6 +56,7 @@ class HandleInertiaRequests extends Middleware
                     'role'  => $request->user()->role ? [
                         'slug' => $request->user()->role->slug,
                     ] : null,
+                    'modules' => $request->user()->modules->pluck('slug'),
                 ] : null,
             ],
 
