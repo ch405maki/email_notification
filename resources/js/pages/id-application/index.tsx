@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner'
 import { Loader2, CheckCircle2, Library, Copy, CopyCheck, Search, RefreshCw, Printer, Trash2 } from 'lucide-react'
 import { formatDate, formatDateShort } from '@/lib/utils'
+import { printIdApplications } from '@/lib/print-id-applications'
 
 const API_BASE = 'http://192.168.0.6/api'
 const API_KEY = '12345'
@@ -92,6 +93,8 @@ export default function IdApplication() {
   const [deleting, setDeleting]         = useState(false)
   const [editingIdNo, setEditingIdNo]   = useState('')
   const [editingId, setEditingId]       = useState(false)
+  const [dateFrom, setDateFrom]         = useState('')
+  const [dateTo, setDateTo]             = useState('')
 
   const isDetailView = statusTab === 'pending'
 
@@ -110,6 +113,12 @@ export default function IdApplication() {
 
   const filtered = useMemo(() => {
     let result = applications.filter(app => app.status === statusTab)
+    if (dateFrom) {
+      result = result.filter(app => !app.date || app.date >= dateFrom)
+    }
+    if (dateTo) {
+      result = result.filter(app => !app.date || app.date <= dateTo)
+    }
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase()
       result = result.filter(app => {
@@ -118,7 +127,7 @@ export default function IdApplication() {
       })
     }
     return result
-  }, [applications, statusTab, debouncedSearch])
+  }, [applications, statusTab, dateFrom, dateTo, debouncedSearch])
 
   // Deselect if no longer in filtered list
   useEffect(() => {
@@ -225,6 +234,10 @@ export default function IdApplication() {
     }
   }, [selectedIds, fetchApplications])
 
+  const handlePrint = useCallback(() => {
+    printIdApplications(filtered, statusTab)
+  }, [filtered, statusTab])
+
   const formattedName = (app: Application) =>
     `${app.last_name}, ${app.first_name}${app.middle_initial ? ' ' + app.middle_initial + '.' : ''}`
 
@@ -313,6 +326,7 @@ export default function IdApplication() {
                   <TableHead className="w-10">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Select all" />
                   </TableHead>
+                  <TableHead className="w-8 text-center">#</TableHead>
                   <TableHead>ID No</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Contact No</TableHead>
@@ -323,7 +337,7 @@ export default function IdApplication() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       <Library className="size-8 mx-auto mb-2 opacity-40" />
                       No matching records found
                     </TableCell>
@@ -340,6 +354,7 @@ export default function IdApplication() {
                           aria-label={`Select ${app.id_no ?? 'row ' + i}`}
                         />
                       </TableCell>
+                      <TableCell className="text-center text-muted-foreground text-sm">{i + 1}</TableCell>
                       {renderCopyCell(app.id_no, `id-${rowKey}`)}
                       <TableCell
                         className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -372,6 +387,7 @@ export default function IdApplication() {
                         {statusTab === 'released' ? (
                           <Button
                             size="sm"
+                            variant="default"
                             onClick={() => updateStatus(app.id!, 'printed')}
                             disabled={updating === String(app.id)}
                           >
@@ -434,23 +450,43 @@ export default function IdApplication() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative w-80">
-            <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search ID or name..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8 h-9"
-            />
-          </div>
-          <Tabs value={statusTab} onValueChange={v => setStatusTab(v)} className="flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <Tabs value={statusTab} onValueChange={v => setStatusTab(v)}>
             <TabsList>
               <TabsTrigger value="pending">Pending</TabsTrigger>
               <TabsTrigger value="released">Released</TabsTrigger>
               <TabsTrigger value="printed">Printed</TabsTrigger>
             </TabsList>
           </Tabs>
+          <div className="flex items-center gap-2">
+            <div className="relative w-72">
+              <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search ID or name..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="w-36 h-9"
+              title="Date from"
+            />
+            <span className="text-sm text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="w-36 h-9"
+              title="Date to"
+            />
+            <Button variant="default" size="sm" onClick={handlePrint}>
+              <Printer className="size-4" /> Print
+            </Button>
+          </div>
         </div>
 
         {isDetailView ? (
@@ -480,6 +516,7 @@ export default function IdApplication() {
                             aria-label="Select all"
                           />
                         </TableHead>
+                        <TableHead className="w-8 text-center">#</TableHead>
                         <TableHead className="w-22 text-start">ID No</TableHead>
                         <TableHead className="text-start">Name</TableHead>
                       </TableRow>
@@ -487,7 +524,7 @@ export default function IdApplication() {
                     <TableBody>
                       {filtered.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                             No matching records found
                           </TableCell>
                         </TableRow>
@@ -505,6 +542,7 @@ export default function IdApplication() {
                                 aria-label={`Select ${app.id_no ?? 'row ' + i}`}
                               />
                             </TableCell>
+                            <TableCell className="text-center text-muted-foreground text-sm">{i + 1}</TableCell>
                             <TableCell className={`text-start font-mono font-medium ${!app.id_no ? 'text-destructive' : ''}`}>
                               {app.id_no ?? (
                                 <span className="text-destructive text-xs font-sans font-medium">Missing</span>
