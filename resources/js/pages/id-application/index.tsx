@@ -111,14 +111,33 @@ export default function IdApplication() {
     setEditingId(false)
   }, [selected])
 
+  // Sort function - newest first by date, fallback to ID
+  const sortByDateDesc = useCallback((apps: Application[]) => {
+    return [...apps].sort((a, b) => {
+      // If both have dates, compare them (newest first)
+      if (a.date && b.date) {
+        return new Date(b.date).getTime() - new Date(a.date).getTime()
+      }
+      // If one has a date, it comes first
+      if (a.date) return -1
+      if (b.date) return 1
+      // If neither has a date, sort by ID (newest first)
+      return b.id - a.id
+    })
+  }, [])
+
   const filtered = useMemo(() => {
     let result = applications.filter(app => app.status === statusTab)
+    
+    // Apply date range filters
     if (dateFrom) {
       result = result.filter(app => !app.date || app.date >= dateFrom)
     }
     if (dateTo) {
       result = result.filter(app => !app.date || app.date <= dateTo)
     }
+    
+    // Apply search filter
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase()
       result = result.filter(app => {
@@ -126,15 +145,17 @@ export default function IdApplication() {
         return (app.id_no ?? '').toLowerCase().includes(q) || fullName.includes(q)
       })
     }
-    return result
-  }, [applications, statusTab, dateFrom, dateTo, debouncedSearch])
+    
+    // Sort by date (newest first)
+    return sortByDateDesc(result)
+  }, [applications, statusTab, dateFrom, dateTo, debouncedSearch, sortByDateDesc])
 
   // Deselect if no longer in filtered list
   useEffect(() => {
     if (selected && !filtered.find(a => a.id === selected.id)) {
       setSelected(null)
     }
-  }, [filtered])
+  }, [filtered, selected])
 
   const fetchApplications = useCallback(async () => {
     setLoading(true)
