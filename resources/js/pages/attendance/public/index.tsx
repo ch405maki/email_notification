@@ -107,7 +107,7 @@ const minutesEarly = (timeIn: string, scheduledTime: string) => {
 // Shared wrapper so idle/success states center the same way instead of
 // hugging the top of the viewport.
 const CENTER_STAGE_CLASS =
-    'flex min-h-[calc(100dvh-9rem)] flex-1 flex-col items-center justify-center gap-6';
+    'flex min-h-[calc(100dvh-9rem)] flex-1 flex-col items-center justify-center gap-6 pb-20';
 
 export default function PublicAttendanceIndex() {
     const [view, setView] = useState<View>('search');
@@ -165,6 +165,18 @@ export default function PublicAttendanceIndex() {
                     },
                 );
                 if (requestId !== requestIdRef.current) return;
+                const data = res.data as LookupResponse;
+                if (!data.upcoming_schedule || !data.attendance_preview) {
+                    const msg =
+                        'No active employee found with that Employee Number or ID Number.';
+                    if (isInitial) {
+                        setLookup(null);
+                        setError(msg);
+                        setView('search');
+                    }
+                    toast.error(msg);
+                    return;
+                }
                 setLookup(res.data);
                 if (isInitial) setView('preview');
             } catch (e: unknown) {
@@ -174,9 +186,8 @@ export default function PublicAttendanceIndex() {
                     setLookup(null);
                     setError(msg);
                     setView('search');
-                } else {
-                    toast.error(msg);
                 }
+                toast.error(msg);
             } finally {
                 if (requestId === requestIdRef.current) {
                     if (isInitial) setLookupLoading(false);
@@ -258,13 +269,6 @@ export default function PublicAttendanceIndex() {
     };
 
     const canReset = keyword.trim() !== '' || view !== 'search' || !!lookup;
-
-    const errorBlock = error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 shadow-sm dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-            <AlertTriangle className="size-4 shrink-0" />
-            {error}
-        </div>
-    );
 
     const searchForm = (
         <form
@@ -380,10 +384,16 @@ export default function PublicAttendanceIndex() {
             <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4">
                 {view === 'search' && !lookup ? (
                     <div className={CENTER_STAGE_CLASS}>
-                        <div style={defaultBlobTheme}>
+                        <div style={error ? lateBlobTheme : defaultBlobTheme}>
                             <JellyBlobMascot
                                 className="size-40 drop-shadow-sm"
-                                mood={searchTyping ? 'sideEye' : 'happy'}
+                                mood={
+                                    searchTyping
+                                        ? 'sideEye'
+                                        : error
+                                          ? 'angry'
+                                          : 'happy'
+                                }
                             />
                         </div>
                         <div className="text-center">
@@ -400,13 +410,11 @@ export default function PublicAttendanceIndex() {
                         </div>
                         <div className="w-full max-w-xl">
                             {searchForm}
-                            {errorBlock}
                         </div>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-6">
                         {searchForm}
-                        {errorBlock}
                     </div>
                 )}
 
