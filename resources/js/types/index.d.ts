@@ -39,7 +39,7 @@ export interface User {
     two_factor_enabled?: boolean;
     status: boolean;
     role: { id: number; name: string; slug: string };
-    modules: { id: number; name: string; slug: string }[];
+    modules: string[];
     created_at: string;
     updated_at: string;
     [key: string]: unknown;
