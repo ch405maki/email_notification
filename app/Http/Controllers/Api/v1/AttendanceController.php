@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api\v1;
 
+use App\Exceptions\AttendanceException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Attendance\PublicLookupRequest;
+use App\Http\Requests\Attendance\PublicTimeInRequest;
 use App\Http\Requests\Attendance\StoreAttendanceRequest;
 use App\Http\Requests\Attendance\UpdateAttendanceRequest;
 use App\Http\Resources\AttendanceLogResource;
 use App\Models\AttendanceLog;
+use App\Models\Employee;
 use App\Models\ScheduleTime;
 use App\Services\AttendanceService;
 use Illuminate\Http\Request;
@@ -47,7 +51,7 @@ class AttendanceController extends Controller
         $logs->getCollection()->each(function (AttendanceLog $log) use ($nameByTime) {
             $name = $log->scheduleTime?->schedule?->name;
 
-            if (!$name) {
+            if (! $name) {
                 $name = $nameByTime->get(substr($log->scheduled_time, 0, 5));
             }
 
@@ -58,8 +62,8 @@ class AttendanceController extends Controller
             'data' => AttendanceLogResource::collection($logs),
             'meta' => [
                 'current_page' => $logs->currentPage(),
-                'last_page'    => $logs->lastPage(),
-                'total'        => $logs->total(),
+                'last_page' => $logs->lastPage(),
+                'total' => $logs->total(),
             ],
         ]);
     }
@@ -67,9 +71,10 @@ class AttendanceController extends Controller
     public function store(StoreAttendanceRequest $request)
     {
         $attendance = $this->attendanceService->createAttendance($request->validated());
+
         return response()->json([
             'message' => 'Attendance recorded successfully',
-            'data'    => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
+            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
         ], 201);
     }
 
@@ -83,15 +88,17 @@ class AttendanceController extends Controller
     public function update(UpdateAttendanceRequest $request, AttendanceLog $attendance)
     {
         $attendance = $this->attendanceService->updateAttendance($attendance, $request->validated());
+
         return response()->json([
             'message' => 'Attendance updated successfully',
-            'data'    => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
+            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
         ]);
     }
 
     public function destroy(AttendanceLog $attendance)
     {
         $attendance->delete();
+
         return response()->json([
             'message' => 'Attendance deleted successfully',
         ]);
@@ -116,5 +123,60 @@ class AttendanceController extends Controller
         return response()->json([
             'data' => $this->attendanceService->getAttendanceDashboard($request->all()),
         ]);
+    }
+
+    public function publicLookup(PublicLookupRequest $request)
+    {
+        try {
+            $preview = $this->attendanceService->previewAttendance(
+                $request->keyword,
+                $request->attendance_date ?? now()->toDateString(),
+                $request->time_in ?? now()->format('H:i')
+            );
+
+            return response()->json([
+                'employee' => [
+                    'id' => $preview['employee']->id,
+                    'employee_number' => $preview['employee']->employee_number,
+                    'id_number' => $preview['employee']->id_number,
+                    'full_name' => $preview['employee']->full_name,
+                ],
+                'upcoming_schedule' => $preview['upcoming_schedule'],
+                'attendance_preview' => $preview['attendance_preview'],
+                'message' => $preview['message'],
+            ]);
+        } catch (AttendanceException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function publicTimeIn(PublicTimeInRequest $request)
+    {
+        try {
+            $employee = Employee::find($request->employee_id);
+
+            if (! $employee || $employee->status !== 'ACTIVE') {
+                throw new AttendanceException('No active employee found with that Employee Number or ID Number.');
+            }
+
+            $attendance = $this->attendanceService->createAttendance([
+                'employee_id' => $request->employee_id,
+                'attendance_date' => $request->attendance_date,
+                'time_in' => $request->time_in,
+            ]);
+
+            return response()->json([
+                'message' => 'Attendance successfully recorded.',
+                'data' => [
+                    'attendance_date' => $attendance->attendance_date->toDateString(),
+                    'scheduled_time' => $attendance->scheduled_time,
+                    'time_in' => $attendance->time_in,
+                    'status' => $attendance->status,
+                    'late_minutes' => $attendance->late_minutes,
+                ],
+            ], 201);
+        } catch (AttendanceException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 }

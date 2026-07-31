@@ -19,20 +19,9 @@ class AttendanceService
     {
         $employee = Employee::findOrFail($data['employee_id']);
 
-        $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $data['attendance_date']);
+        $scheduleTime = $this->getNextScheduleTime($employee, $data['attendance_date']);
 
-        if ($scheduleTimes->isEmpty()) {
-            throw new AttendanceException('No active schedule is assigned to this employee.');
-        }
-
-        $usedIds = $this->getUsedScheduleTimeIds($employee->id, $data['attendance_date']);
-        $usedTimes = $this->getUsedScheduleTimes($employee->id, $data['attendance_date']);
-
-        $scheduleTime = $scheduleTimes->first(function (ScheduleTime $time) use ($usedIds, $usedTimes) {
-            return !in_array($time->id, $usedIds) && !in_array($time->scheduled_time, $usedTimes);
-        });
-
-        if (!$scheduleTime) {
+        if (! $scheduleTime) {
             throw new AttendanceException('All required attendance schedules for this date have already been completed.');
         }
 
@@ -40,16 +29,68 @@ class AttendanceService
         $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
 
         return AttendanceLog::create([
-            'employee_id'     => $data['employee_id'],
+            'employee_id' => $data['employee_id'],
             'attendance_date' => $data['attendance_date'],
             'schedule_time_id' => $scheduleTime->id,
-            'scheduled_time'  => $scheduleTime->scheduled_time,
-            'time_in'         => $data['time_in'],
-            'status'          => $status,
-            'late_minutes'    => $lateMinutes,
-            'remarks'         => $data['remarks'] ?? null,
-            'created_by'      => auth()->id(),
+            'scheduled_time' => $scheduleTime->scheduled_time,
+            'time_in' => $data['time_in'],
+            'status' => $status,
+            'late_minutes' => $lateMinutes,
+            'remarks' => $data['remarks'] ?? null,
+            'created_by' => auth()->id(),
         ]);
+    }
+
+    public function previewAttendance(string $keyword, string $date, string $timeIn): array
+    {
+        $employee = Employee::where('status', 'ACTIVE')
+            ->where(function ($query) use ($keyword) {
+                $query->where('employee_number', $keyword)
+                    ->orWhere('id_number', $keyword);
+            })
+            ->first();
+
+        if (! $employee) {
+            throw new AttendanceException('No active employee found with that Employee Number or ID Number.');
+        }
+
+        $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $date);
+
+        if ($scheduleTimes->isEmpty()) {
+            return [
+                'employee' => $employee,
+                'upcoming_schedule' => null,
+                'attendance_preview' => null,
+                'message' => 'No active schedule is assigned to this employee.',
+            ];
+        }
+
+        $scheduleTime = $this->getNextScheduleTime($employee, $date);
+
+        if (! $scheduleTime) {
+            return [
+                'employee' => $employee,
+                'upcoming_schedule' => null,
+                'attendance_preview' => null,
+                'message' => 'All required attendance schedules for this date have already been completed.',
+            ];
+        }
+
+        $lateMinutes = $this->computeLateMinutes($timeIn, $scheduleTime->scheduled_time);
+        $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
+
+        return [
+            'employee' => $employee,
+            'upcoming_schedule' => [
+                'schedule_time_id' => $scheduleTime->id,
+                'scheduled_time' => $scheduleTime->scheduled_time,
+            ],
+            'attendance_preview' => [
+                'status' => $status,
+                'late_minutes' => $lateMinutes,
+            ],
+            'message' => null,
+        ];
     }
 
     public function updateAttendance(AttendanceLog $attendance, array $data): AttendanceLog
@@ -65,11 +106,11 @@ class AttendanceService
 
         $attendance->update([
             'attendance_date' => $data['attendance_date'] ?? $attendance->attendance_date,
-            'time_in'         => $data['time_in'] ?? $attendance->time_in,
-            'status'          => $status,
-            'late_minutes'    => $lateMinutes,
-            'remarks'         => $data['remarks'] ?? $attendance->remarks,
-            'updated_by'      => auth()->id(),
+            'time_in' => $data['time_in'] ?? $attendance->time_in,
+            'status' => $status,
+            'late_minutes' => $lateMinutes,
+            'remarks' => $data['remarks'] ?? $attendance->remarks,
+            'updated_by' => auth()->id(),
         ]);
 
         return $attendance->fresh();
@@ -98,10 +139,10 @@ class AttendanceService
         $compliance = $this->buildComplianceCollection($filters);
 
         return [
-            'present_days'             => (int) $totals->present_days,
-            'late_count'               => (int) $totals->late_count,
-            'total_late_minutes'       => $totalLateMinutes,
-            'total_late_hours'         => round($totalLateMinutes / 60, 2),
+            'present_days' => (int) $totals->present_days,
+            'late_count' => (int) $totals->late_count,
+            'total_late_minutes' => $totalLateMinutes,
+            'total_late_hours' => round($totalLateMinutes / 60, 2),
             'employees_near_threshold' => $compliance->where('status', 'WARNING')->count(),
             'employees_over_threshold' => $compliance->where('status', 'THRESHOLD REACHED')->count(),
         ];
@@ -125,7 +166,7 @@ class AttendanceService
             'status',
         ];
 
-        if (!in_array($sortBy, $sortable, true)) {
+        if (! in_array($sortBy, $sortable, true)) {
             $sortBy = 'late_minutes';
         }
 
@@ -140,9 +181,9 @@ class AttendanceService
             'data' => $rows->forPage($page, $perPage)->values()->all(),
             'meta' => [
                 'current_page' => $page,
-                'last_page'    => (int) ceil($rows->count() / $perPage),
-                'per_page'     => $perPage,
-                'total'        => $rows->count(),
+                'last_page' => (int) ceil($rows->count() / $perPage),
+                'per_page' => $perPage,
+                'total' => $rows->count(),
             ],
         ];
     }
@@ -150,13 +191,13 @@ class AttendanceService
     public function getAttendanceDashboard(array $filters): array
     {
         return [
-            'summary'    => $this->getAttendanceSummary($filters),
+            'summary' => $this->getAttendanceSummary($filters),
             'compliance' => $this->getAttendanceCompliance($filters),
-            'chart'      => $this->getChartData($filters),
-            'range'      => $this->resolveDateRange($filters),
+            'chart' => $this->getChartData($filters),
+            'range' => $this->resolveDateRange($filters),
             'thresholds' => [
                 'late_minutes_threshold' => (int) config('attendance.late_minutes_threshold'),
-                'late_count_threshold'   => (int) config('attendance.late_count_threshold'),
+                'late_count_threshold' => (int) config('attendance.late_count_threshold'),
             ],
         ];
     }
@@ -193,36 +234,36 @@ class AttendanceService
         return match ($cutoff) {
             'first' => [
                 'date_from' => $now->copy()->startOfMonth()->toDateString(),
-                'date_to'   => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
+                'date_to' => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
             ],
             'second' => [
                 'date_from' => $now->copy()->startOfMonth()->addDays(15)->toDateString(),
-                'date_to'   => $now->copy()->endOfMonth()->toDateString(),
+                'date_to' => $now->copy()->endOfMonth()->toDateString(),
             ],
             'custom' => [
                 'date_from' => $filters['date_from'] ?? $now->copy()->startOfMonth()->toDateString(),
-                'date_to'   => $filters['date_to'] ?? $now->copy()->endOfMonth()->toDateString(),
+                'date_to' => $filters['date_to'] ?? $now->copy()->endOfMonth()->toDateString(),
             ],
             'today' => [
                 'date_from' => $now->copy()->toDateString(),
-                'date_to'   => $now->copy()->toDateString(),
+                'date_to' => $now->copy()->toDateString(),
             ],
             'week' => [
                 'date_from' => $now->copy()->subDays(6)->toDateString(),
-                'date_to'   => $now->copy()->toDateString(),
+                'date_to' => $now->copy()->toDateString(),
             ],
             'month' => [
                 'date_from' => $now->copy()->subDays(29)->toDateString(),
-                'date_to'   => $now->copy()->toDateString(),
+                'date_to' => $now->copy()->toDateString(),
             ],
             default => (int) $now->format('j') <= 15
                 ? [
                     'date_from' => $now->copy()->startOfMonth()->toDateString(),
-                    'date_to'   => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
+                    'date_to' => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
                 ]
                 : [
                     'date_from' => $now->copy()->startOfMonth()->addDays(15)->toDateString(),
-                    'date_to'   => $now->copy()->endOfMonth()->toDateString(),
+                    'date_to' => $now->copy()->endOfMonth()->toDateString(),
                 ],
         };
     }
@@ -255,7 +296,7 @@ class AttendanceService
         foreach ($stats as $stat) {
             $employee = $employees->get($stat->employee_id);
 
-            if (!$employee) {
+            if (! $employee) {
                 continue;
             }
 
@@ -286,15 +327,15 @@ class AttendanceService
         $status = $this->calculateComplianceStatus(max($lateMinutesPercentage, $lateCountPercentage));
 
         return [
-            'employee_id'             => $employee->id,
-            'employee_number'         => $employee->employee_number,
-            'full_name'               => $employee->full_name,
-            'late_count'              => $lateCount,
-            'late_minutes'            => $lateMinutes,
-            'late_count_percentage'   => $lateCountPercentage,
+            'employee_id' => $employee->id,
+            'employee_number' => $employee->employee_number,
+            'full_name' => $employee->full_name,
+            'late_count' => $lateCount,
+            'late_minutes' => $lateMinutes,
+            'late_count_percentage' => $lateCountPercentage,
             'late_minutes_percentage' => $lateMinutesPercentage,
-            'risk_score'              => $riskScore,
-            'status'                  => $status,
+            'risk_score' => $riskScore,
+            'status' => $status,
         ];
     }
 
@@ -305,13 +346,29 @@ class AttendanceService
             ->values()
             ->map(fn (array $row) => [
                 'employee_number' => $row['employee_number'],
-                'full_name'       => $row['full_name'],
-                'label'           => $row['employee_number'],
-                'late_minutes'    => $row['late_minutes'],
-                'late_count'      => $row['late_count'],
-                'status'          => $row['status'],
+                'full_name' => $row['full_name'],
+                'label' => $row['employee_number'],
+                'late_minutes' => $row['late_minutes'],
+                'late_count' => $row['late_count'],
+                'status' => $row['status'],
             ])
             ->all();
+    }
+
+    protected function getNextScheduleTime(Employee $employee, string $date): ?ScheduleTime
+    {
+        $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $date);
+
+        if ($scheduleTimes->isEmpty()) {
+            throw new AttendanceException('No active schedule is assigned to this employee.');
+        }
+
+        $usedIds = $this->getUsedScheduleTimeIds($employee->id, $date);
+        $usedTimes = $this->getUsedScheduleTimes($employee->id, $date);
+
+        return $scheduleTimes->first(function (ScheduleTime $time) use ($usedIds, $usedTimes) {
+            return ! in_array($time->id, $usedIds) && ! in_array($time->scheduled_time, $usedTimes);
+        });
     }
 
     protected function computeLateMinutes(string $timeIn, string $scheduledTime): int
@@ -319,7 +376,7 @@ class AttendanceService
         $timeIn = Carbon::parse($timeIn);
         $scheduled = Carbon::parse($scheduledTime);
 
-        if (!$timeIn->greaterThan($scheduled)) {
+        if (! $timeIn->greaterThan($scheduled)) {
             return 0;
         }
 

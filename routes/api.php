@@ -1,17 +1,17 @@
 <?php
 
+use App\Http\Controllers\Api\v1\AttendanceController;
+use App\Http\Controllers\Api\v1\EmailController;
+use App\Http\Controllers\Api\v1\EmailLogController;
+use App\Http\Controllers\Api\v1\EmployeeController;
+use App\Http\Controllers\Api\v1\EmployeeScheduleAssignmentController;
+use App\Http\Controllers\Api\v1\ModulesController;
+use App\Http\Controllers\Api\v1\RolesController;
+use App\Http\Controllers\Api\v1\ScheduleController;
+use App\Http\Controllers\Api\v1\StudentController;
+use App\Http\Controllers\Api\v1\UsersController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\v1\UsersController;
-use App\Http\Controllers\Api\v1\RolesController;
-use App\Http\Controllers\Api\v1\ModulesController;
-use App\Http\Controllers\Api\v1\StudentController;
-use App\Http\Controllers\Api\v1\EmailLogController;
-use App\Http\Controllers\Api\v1\EmailController;
-use App\Http\Controllers\Api\v1\EmployeeController;
-use App\Http\Controllers\Api\v1\ScheduleController;
-use App\Http\Controllers\Api\v1\EmployeeScheduleAssignmentController;
-use App\Http\Controllers\Api\v1\AttendanceController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -52,6 +52,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/attendance-dashboard', [AttendanceController::class, 'dashboard']);
     Route::get('/attendance', [AttendanceController::class, 'index']);
     Route::post('/attendance', [AttendanceController::class, 'store']);
+    Route::post('/attendance/public/lookup', [AttendanceController::class, 'publicLookup']);
+    Route::post('/attendance/public/time-in', [AttendanceController::class, 'publicTimeIn']);
 
     Route::middleware(['auth:sanctum', 'module:attendance'])->group(function () {
         Route::apiResource('employees', EmployeeController::class);
@@ -62,4 +64,3 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('attendance', AttendanceController::class)->only(['show', 'update', 'destroy']);
     });
 });
-
