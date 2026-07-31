@@ -10,6 +10,8 @@ use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
 use App\Services\EmployeeService;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
+use App\Models\AttendanceLog;
 
 class EmployeeController extends Controller
 {
@@ -65,19 +67,46 @@ class EmployeeController extends Controller
 
     public function options(Request $request)
     {
-        $query = Employee::query();
+        $query = Employee::with([
+            'scheduleAssignments.schedule.scheduleTimes'
+        ]);
 
         if ($search = $request->search) {
             $query->where(function ($q) use ($search) {
                 $q->where('employee_number', 'like', "%{$search}%")
-                  ->orWhere('id_number', 'like', "%{$search}%")
-                  ->orWhere('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%");
+                ->orWhere('id_number', 'like', "%{$search}%")
+                ->orWhere('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%");
             });
         }
 
+        $employees = $query->get()->map(function ($employee) {
+            $assignment = $employee->scheduleAssignments->first();
+
+            $scheduleTimes = $assignment?->schedule?->scheduleTimes
+                ?->sortBy('sequence')
+                ?->values();
+
+            $usedIds = AttendanceLog::where('employee_id', $employee->id)
+                ->whereDate('attendance_date', Carbon::today())
+                ->pluck('schedule_time_id')
+                ->filter()
+                ->all();
+
+            $nextSchedule = $scheduleTimes?->first(function ($time) use ($usedIds) {
+                return !in_array($time->id, $usedIds);
+            });
+
+            return [
+                'id' => $employee->id,
+                'employee_number' => $employee->employee_number,
+                'full_name' => $employee->full_name,
+                'schedule_time' => $nextSchedule?->scheduled_time,
+            ];
+        });
+
         return response()->json([
-            'data' => EmployeeOptionResource::collection($query->get()),
+            'data' => $employees,
         ]);
     }
 }
