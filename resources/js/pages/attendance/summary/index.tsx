@@ -27,7 +27,7 @@ import {
   YAxis,
 } from 'recharts'
 import { toast } from 'sonner'
-import { Search, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Trophy } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -101,6 +101,8 @@ const STATUS_COLORS: Record<string, string> = {
   WARNING: '#f59e0b',
   'THRESHOLD REACHED': '#ef4444',
 }
+
+const RANK_COLORS = ['text-yellow-500', 'text-slate-400', 'text-orange-500']
 
 const chartConfig = {
   late_minutes: { label: 'Late Minutes', color: 'var(--chart-1)' },
@@ -430,6 +432,7 @@ export default function AttendanceDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">Rank</TableHead>
                   <SortHead label="Employee #" column="employee_number" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Full Name" column="full_name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Late Count" column="late_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
@@ -440,13 +443,20 @@ export default function AttendanceDashboard() {
               </TableHeader>
               <TableBody>
                 {loading && !compliance && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
                 )}
                 {compliance?.data.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No compliance data found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No compliance data found</TableCell></TableRow>
                 )}
-                {compliance?.data.map(row => (
+                {compliance?.data.map((row, index) => (
                   <TableRow key={row.employee_id} className={statusRowClass[row.status]}>
+                    <TableCell>
+                      {index < 3 ? (
+                        <Trophy className={`size-4 ${RANK_COLORS[index]}`} />
+                      ) : (
+                        <span className="text-muted-foreground">{index + 1}</span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono">{row.employee_number}</TableCell>
                     <TableCell>{row.full_name}</TableCell>
                     <TableCell>{row.late_count}</TableCell>
