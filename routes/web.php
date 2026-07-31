@@ -38,3 +38,4 @@ require __DIR__.'/settings.php';
 require __DIR__.'/webRoutes/users.php';
 require __DIR__.'/webRoutes/students.php';
 require __DIR__.'/webRoutes/id-application.php';
+require __DIR__.'/webRoutes/attendance.php';

@@ -19,6 +19,7 @@ class ModuleSeeder extends Seeder
             ['name' => 'Onload Banner',       'slug' => 'onload-banner'],
             ['name' => 'Subject Status',      'slug' => 'subject-status'],
             ['name' => 'Bar Passers',         'slug' => 'bar-passers'],
+            ['name' => 'Attendance',          'slug' => 'attendance'],
         ];
 
         foreach ($modules as $module) {
