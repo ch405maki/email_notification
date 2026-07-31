@@ -104,6 +104,11 @@ const minutesEarly = (timeIn: string, scheduledTime: string) => {
     return Math.max(0, toMinutes(scheduledTime) - toMinutes(timeIn));
 };
 
+// Shared wrapper so idle/success states center the same way instead of
+// hugging the top of the viewport.
+const CENTER_STAGE_CLASS =
+    'flex min-h-[calc(100dvh-9rem)] flex-1 flex-col items-center justify-center gap-6';
+
 export default function PublicAttendanceIndex() {
     const [view, setView] = useState<View>('search');
     const [keyword, setKeyword] = useState('');
@@ -139,8 +144,9 @@ export default function PublicAttendanceIndex() {
 
     const performLookup = useCallback(
         async (kw: string, date: string, time: string, isInitial: boolean) => {
-            const requestId = ++requestIdRef.current;
-            lastLookupRef.current = `${date}|${time}`;
+        const requestId = ++requestIdRef.current;
+        lastLookupRef.current = `${date}|${time}`;
+        lastSearchKwRef.current = kw;
             if (isInitial) {
                 setAttendanceDate(date);
                 setTimeIn(time);
@@ -189,17 +195,17 @@ export default function PublicAttendanceIndex() {
     };
 
     useEffect(() => {
-        if (view !== 'search') return;
         const kw = debouncedKeyword.trim();
         if (!kw || kw.length < 4 || lookupLoading) return;
+        if (kw !== keyword.trim()) return;
         if (kw === lastSearchKwRef.current) return;
         lastSearchKwRef.current = kw;
         const searchDate = new Date();
         performLookup(kw, toDateStr(searchDate), toTimeStr(searchDate), true);
-    }, [debouncedKeyword, view, lookupLoading, performLookup]);
+    }, [debouncedKeyword, keyword, lookupLoading, performLookup]);
 
     useEffect(() => {
-        if (view !== 'preview' || !lookup) return;
+        if (view !== 'preview' || !lookup || !keyword.trim()) return;
         const key = `${attendanceDate}|${timeIn}`;
         if (key === lastLookupRef.current) return;
         const timer = setTimeout(() => {
@@ -254,7 +260,7 @@ export default function PublicAttendanceIndex() {
     const canReset = keyword.trim() !== '' || view !== 'search' || !!lookup;
 
     const errorBlock = error && (
-        <div className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 shadow-sm dark:border-red-800 dark:bg-red-950 dark:text-red-300">
             <AlertTriangle className="size-4 shrink-0" />
             {error}
         </div>
@@ -282,7 +288,7 @@ export default function PublicAttendanceIndex() {
                         );
                     }}
                     placeholder="Enter Employee Number or ID Number"
-                    className="h-12 rounded-full pr-4 pl-11 text-base"
+                    className="h-12 rounded-full border-muted-foreground/20 pr-4 pl-11 text-base shadow-sm focus-visible:ring-2"
                     autoFocus
                     disabled={lookupLoading}
                 />
@@ -291,7 +297,7 @@ export default function PublicAttendanceIndex() {
                 type="button"
                 size="icon"
                 variant="outline"
-                className="size-12 shrink-0 rounded-full"
+                className="size-12 shrink-0 rounded-full shadow-sm"
                 onClick={handleReset}
                 disabled={lookupLoading || !canReset}
                 aria-label="Reset search"
@@ -333,9 +339,9 @@ export default function PublicAttendanceIndex() {
 
     const bubbleBorderClass =
         previewStatus === 'LATE'
-            ? 'border-red-300 dark:border-red-800'
+            ? 'border-red-200 bg-red-50/40 dark:border-red-900 dark:bg-red-950/20'
             : previewStatus === 'ON_TIME'
-              ? 'border-green-300 dark:border-green-800'
+              ? 'border-green-200 bg-green-50/40 dark:border-green-900 dark:bg-green-950/20'
               : 'border-border';
 
     const bubbleTheme: BlobTheme =
@@ -373,21 +379,21 @@ export default function PublicAttendanceIndex() {
 
             <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4">
                 {view === 'search' && !lookup ? (
-                    <div className="flex min-h-[calc(100dvh-9rem)] flex-1 flex-col items-center justify-center gap-6">
+                    <div className={CENTER_STAGE_CLASS}>
                         <div style={defaultBlobTheme}>
                             <JellyBlobMascot
-                                className="size-40"
+                                className="size-40 drop-shadow-sm"
                                 mood={searchTyping ? 'sideEye' : 'happy'}
                             />
                         </div>
                         <div className="text-center">
-                            <h2 className="text-2xl font-semibold">
+                            <h2 className="text-4xl font-semibold tracking-tight">
                                 {now.toLocaleTimeString([], {
                                     hour: 'numeric',
                                     minute: '2-digit',
                                 })}
                             </h2>
-                            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                            <p className="mt-2 max-w-md text-sm text-muted-foreground">
                                 Enter your Employee Number or ID Number to begin
                                 your time-in.
                             </p>
@@ -405,9 +411,9 @@ export default function PublicAttendanceIndex() {
                 )}
 
                 {view === 'preview' && lookup && (
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 duration-300 animate-in fade-in slide-in-from-bottom-2">
                         <div
-                            className={`flex items-start gap-3 rounded-xl border p-4 ${bubbleBorderClass}`}
+                            className={`flex items-center gap-4 rounded-2xl border p-4 shadow-sm sm:p-5 ${bubbleBorderClass}`}
                         >
                             <div
                                 className="flex shrink-0 flex-col items-center"
@@ -425,7 +431,7 @@ export default function PublicAttendanceIndex() {
                                     }}
                                 />
                                 <Avatar
-                                    className={`mt-1 size-16 shrink-0 overflow-hidden rounded-full bg-muted ${avatarRingClass}`}
+                                    className={`mt-1 size-20 shrink-0 overflow-hidden rounded-full bg-muted ${avatarRingClass}`}
                                     style={blobTheme}
                                 >
                                     <JellyBlobMascot
@@ -492,115 +498,99 @@ export default function PublicAttendanceIndex() {
                         </div>
 
                         {lookup.upcoming_schedule &&
-                        lookup.attendance_preview ? (
-                            <>
-                                <Card>
-                                    <CardContent className="px-6 py-4">
-                                        <div className="grid gap-4 sm:grid-cols-2">
-                                            <div>
-                                                <Label htmlFor="attendance-date">
-                                                    Attendance Date
-                                                </Label>
-                                                <Input
-                                                    id="attendance-date"
-                                                    type="date"
-                                                    value={attendanceDate}
-                                                    onChange={(e) =>
-                                                        setAttendanceDate(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    disabled={submitLoading}
-                                                />
-                                            </div>
-                                            <div>
-                                                <Label htmlFor="time-in">
-                                                    Time In
-                                                </Label>
-                                                <Input
-                                                    id="time-in"
-                                                    type="time"
-                                                    value={timeIn}
-                                                    onChange={(e) =>
-                                                        setTimeIn(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    disabled={submitLoading}
-                                                />
-                                            </div>
+                        lookup.attendance_preview && (
+                            <Card className="shadow-sm">
+                                <CardContent className="px-6 py-5">
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <Label htmlFor="attendance-date">
+                                                Attendance Date
+                                            </Label>
+                                            <Input
+                                                id="attendance-date"
+                                                type="date"
+                                                value={attendanceDate}
+                                                onChange={(e) =>
+                                                    setAttendanceDate(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                disabled={submitLoading}
+                                                className="mt-1.5"
+                                            />
                                         </div>
+                                        <div>
+                                            <Label htmlFor="time-in">
+                                                Time In
+                                            </Label>
+                                            <Input
+                                                id="time-in"
+                                                type="time"
+                                                value={timeIn}
+                                                onChange={(e) =>
+                                                    setTimeIn(e.target.value)
+                                                }
+                                                disabled={submitLoading}
+                                                className="mt-1.5"
+                                            />
+                                        </div>
+                                    </div>
 
-                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm text-muted-foreground">
-                                                    Status
-                                                </span>
-                                                <Badge
-                                                    className={
-                                                        statusBadgeClass[
-                                                            lookup
-                                                                .attendance_preview
-                                                                .status
-                                                        ]
-                                                    }
-                                                >
-                                                    {lookup.attendance_preview
-                                                        .status === 'LATE' ? (
-                                                        <AlertTriangle className="size-3" />
-                                                    ) : (
-                                                        <CheckCircle2 className="size-3" />
-                                                    )}
-                                                    {statusLabel(
+                                    <div className="mt-5 flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-muted-foreground">
+                                                Status
+                                            </span>
+                                            <Badge
+                                                className={
+                                                    statusBadgeClass[
                                                         lookup
                                                             .attendance_preview
-                                                            .status,
-                                                    )}
-                                                </Badge>
-                                            </div>
-                                            {lookup.attendance_preview
-                                                .status === 'LATE' && (
-                                                <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                                                    {
-                                                        lookup
-                                                            .attendance_preview
-                                                            .late_minutes
-                                                    }{' '}
-                                                    minute
-                                                    {lookup.attendance_preview
-                                                        .late_minutes === 1
-                                                        ? ''
-                                                        : 's'}{' '}
-                                                    late
-                                                </span>
-                                            )}
+                                                            .status
+                                                    ]
+                                                }
+                                            >
+                                                {lookup.attendance_preview
+                                                    .status === 'LATE' ? (
+                                                    <AlertTriangle className="size-3" />
+                                                ) : (
+                                                    <CheckCircle2 className="size-3" />
+                                                )}
+                                                {statusLabel(
+                                                    lookup.attendance_preview
+                                                        .status,
+                                                )}
+                                            </Badge>
                                         </div>
+                                        {lookup.attendance_preview.status ===
+                                            'LATE' && (
+                                            <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                                                {
+                                                    lookup.attendance_preview
+                                                        .late_minutes
+                                                }{' '}
+                                                minute
+                                                {lookup.attendance_preview
+                                                    .late_minutes === 1
+                                                    ? ''
+                                                    : 's'}{' '}
+                                                late
+                                            </span>
+                                        )}
+                                    </div>
 
-                                        <Button
-                                            className="mt-4 w-full"
-                                            size="lg"
-                                            onClick={handleConfirm}
-                                            disabled={submitLoading}
-                                        >
-                                            {submitLoading ? (
-                                                <Loader2 className="size-4 animate-spin" />
-                                            ) : (
-                                                <LogIn className="size-4" />
-                                            )}
-                                            Confirm Time In
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </>
-                        ) : (
-                            <Card>
-                                <CardContent className="px-6 py-4">
                                     <Button
-                                        variant="outline"
-                                        onClick={handleReset}
+                                        className="mt-4 w-full"
+                                        size="lg"
+                                        onClick={handleConfirm}
+                                        disabled={submitLoading}
                                     >
-                                        <RefreshCw className="size-4" />
-                                        Try Another Employee
+                                        {submitLoading ? (
+                                            <Loader2 className="size-4 animate-spin" />
+                                        ) : (
+                                            <LogIn className="size-4" />
+                                        )}
+                                        Confirm Time In
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -609,8 +599,8 @@ export default function PublicAttendanceIndex() {
                 )}
 
                 {view === 'success' && lookup && (
-                    <div className="flex flex-col gap-4">
-                        <div className="flex items-start gap-3 rounded-xl border border-green-300 p-4 dark:border-green-800">
+                    <div className="flex flex-col gap-4 duration-300 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-4 rounded-2xl border border-green-200 bg-green-50/40 p-5 shadow-sm dark:border-green-900 dark:bg-green-950/20">
                             <div
                                 className="flex shrink-0 flex-col items-center"
                                 style={successBubbleTheme}
@@ -624,7 +614,7 @@ export default function PublicAttendanceIndex() {
                                     }}
                                 />
                                 <Avatar
-                                    className="mt-1 size-16 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-green-500 ring-offset-2 ring-offset-background"
+                                    className="mt-1 size-20 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-green-500 ring-offset-2 ring-offset-background"
                                     style={onTimeBlobTheme}
                                 >
                                     <JellyBlobMascot
