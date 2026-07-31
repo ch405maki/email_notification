@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'module:attendance'])->group(function () {
     Route::get('attendance/employees', function () {
         return Inertia::render('attendance/employees/index');
     })->name('attendance.employees');

@@ -51,14 +51,15 @@ Route::prefix('v1')->group(function () {
     Route::get('/employees/options', [EmployeeController::class, 'options']);
     Route::get('/attendance-dashboard', [AttendanceController::class, 'dashboard']);
     Route::get('/attendance', [AttendanceController::class, 'index']);
+    Route::post('/attendance', [AttendanceController::class, 'store']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'module:attendance'])->group(function () {
         Route::apiResource('employees', EmployeeController::class);
         Route::apiResource('schedules', ScheduleController::class);
         Route::apiResource('employee-schedules', EmployeeScheduleAssignmentController::class);
         Route::get('/attendance-summary', [AttendanceController::class, 'summary']);
         Route::get('/attendance-compliance', [AttendanceController::class, 'compliance']);
-        Route::apiResource('attendance', AttendanceController::class)->except('index');
+        Route::apiResource('attendance', AttendanceController::class)->only(['show', 'update', 'destroy']);
     });
 });
 

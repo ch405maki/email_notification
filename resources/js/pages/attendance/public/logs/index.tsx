@@ -9,10 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { RefreshCw, Clock, Pencil, Trash2 } from 'lucide-react'
+import { RefreshCw, Clock } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Public', href: '/public/attendance' },
@@ -72,10 +71,7 @@ export default function AttendanceLogIndex() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<AttendanceLog | null>(null)
   const [form, setForm] = useState({ employee_id: '', attendance_date: '', time_in: '', remarks: '' })
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleting, setDeleting] = useState<AttendanceLog | null>(null)
 
   const fetchLogs = useCallback(async (page = 1) => {
     setLoading(true)
@@ -106,10 +102,27 @@ export default function AttendanceLogIndex() {
 
   const pad = (n: number) => String(n).padStart(2, '0')
   const toDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
   const todayStr = () => toDateStr(new Date())
   const nowStr = () => {
     const d = new Date()
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const openCreate = () => {
+    setForm({ employee_id: '', attendance_date: todayStr(), time_in: nowStr(), remarks: '' })
+    setOpen(true)
+  }
+
+  const handleSave = async () => {
+    try {
+      await axios.post('/api/v1/attendance', { ...form, employee_id: Number(form.employee_id) })
+      toast.success('Attendance recorded')
+      setOpen(false)
+      fetchLogs()
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Save failed')
+    }
   }
 
   const handleRangePreset = (value: string) => {
@@ -132,48 +145,6 @@ export default function AttendanceLogIndex() {
     }
   }
 
-  const openCreate = () => {
-    setEditing(null)
-    setForm({ employee_id: '', attendance_date: todayStr(), time_in: nowStr(), remarks: '' })
-    setOpen(true)
-  }
-
-  const openEdit = (log: AttendanceLog) => {
-    setEditing(log)
-    setForm({ employee_id: String(log.employee_id), attendance_date: log.attendance_date.slice(0, 10), time_in: log.time_in.slice(0, 5), remarks: log.remarks ?? '' })
-    setOpen(true)
-  }
-
-  const handleSave = async () => {
-    try {
-      const payload = { ...form, employee_id: Number(form.employee_id) }
-      if (editing) {
-        await axios.put(`/api/v1/attendance/${editing.id}`, payload)
-        toast.success('Attendance updated')
-      } else {
-        await axios.post('/api/v1/attendance', payload)
-        toast.success('Attendance recorded')
-      }
-      setOpen(false)
-      fetchLogs()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Save failed')
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deleting) return
-    try {
-      await axios.delete(`/api/v1/attendance/${deleting.id}`)
-      toast.success('Attendance deleted')
-      setDeleteOpen(false)
-      setDeleting(null)
-      fetchLogs()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Delete failed')
-    }
-  }
-
   return (
     <PublicLayout breadcrumbs={breadcrumbs}>
       <Head title="Attendance Logs" />
@@ -181,7 +152,7 @@ export default function AttendanceLogIndex() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Attendance Logs</h1>
-            <p className="text-sm text-muted-foreground">View and manage attendance records</p>
+            <p className="text-sm text-muted-foreground">View and record attendance</p>
           </div>
           <Button onClick={openCreate}><Clock /> Record Attendance</Button>
         </div>
@@ -230,15 +201,14 @@ export default function AttendanceLogIndex() {
                 <TableHead>Status</TableHead>
                 <TableHead>Late (min)</TableHead>
                 <TableHead>Remarks</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && !data && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
               )}
               {data?.data.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No attendance records found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No attendance records found</TableCell></TableRow>
               )}
               {data?.data.map(log => (
                 <TableRow key={log.id} className={statusRowClass[log.status]}>
@@ -254,10 +224,6 @@ export default function AttendanceLogIndex() {
                   <TableCell><Badge className={statusColors[log.status]}>{log.status}</Badge></TableCell>
                   <TableCell>{log.late_minutes > 0 ? log.late_minutes : '—'}</TableCell>
                   <TableCell className="max-w-32 truncate">{log.remarks || '—'}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(log)}><Pencil /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => { setDeleting(log); setDeleteOpen(true) }}><Trash2 className="text-red-500" /></Button>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -275,21 +241,19 @@ export default function AttendanceLogIndex() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? 'Edit Attendance' : 'Record Attendance'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Record Attendance</DialogTitle></DialogHeader>
           <div className="grid gap-4">
-            {!editing && (
-              <div>
-                <Label>Employee</Label>
-                <Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map(e => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.full_name} ({e.employee_number})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div>
+              <Label>Employee</Label>
+              <Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={String(e.id)}>{e.full_name} ({e.employee_number})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Date</Label><Input type="date" value={form.attendance_date} onChange={e => setForm({ ...form, attendance_date: e.target.value })} /></div>
             <div><Label>Time In</Label><Input type="time" value={form.time_in} onChange={e => setForm({ ...form, time_in: e.target.value })} /></div>
             <div><Label>Remarks</Label><Input value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} /></div>
@@ -297,17 +261,6 @@ export default function AttendanceLogIndex() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Attendance Record?</AlertDialogTitle></AlertDialogHeader>
-          <p className="my-2">Are you sure you want to delete this attendance record?</p>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PublicLayout>
   )
 }
