@@ -8,37 +8,45 @@ use App\Models\Employee;
 use App\Models\ScheduleTime;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class AttendanceService
 {
     public function __construct(
-        protected ScheduleAssignmentService $scheduleAssignmentService
+        protected ScheduleAssignmentService $scheduleAssignmentService,
+        protected AttendanceComplianceService $attendanceComplianceService
     ) {}
 
     public function createAttendance(array $data): AttendanceLog
     {
-        $employee = Employee::findOrFail($data['employee_id']);
+        return DB::transaction(function () use ($data) {
+            $employee = Employee::findOrFail($data['employee_id']);
 
-        $scheduleTime = $this->getNextScheduleTime($employee, $data['attendance_date']);
+            $scheduleTime = $this->getNextScheduleTime($employee, $data['attendance_date']);
 
-        if (! $scheduleTime) {
-            throw new AttendanceException('All required attendance schedules for this date have already been completed.');
-        }
+            if (! $scheduleTime) {
+                throw new AttendanceException('All required attendance schedules for this date have already been completed.');
+            }
 
-        $lateMinutes = $this->computeLateMinutes($data['time_in'], $scheduleTime->scheduled_time);
-        $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
+            $lateMinutes = $this->computeLateMinutes($data['time_in'], $scheduleTime->scheduled_time);
+            $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
 
-        return AttendanceLog::create([
-            'employee_id' => $data['employee_id'],
-            'attendance_date' => $data['attendance_date'],
-            'schedule_time_id' => $scheduleTime->id,
-            'scheduled_time' => $scheduleTime->scheduled_time,
-            'time_in' => $data['time_in'],
-            'status' => $status,
-            'late_minutes' => $lateMinutes,
-            'remarks' => $data['remarks'] ?? null,
-            'created_by' => auth()->id(),
-        ]);
+            $attendance = AttendanceLog::create([
+                'employee_id' => $data['employee_id'],
+                'attendance_date' => $data['attendance_date'],
+                'schedule_time_id' => $scheduleTime->id,
+                'scheduled_time' => $scheduleTime->scheduled_time,
+                'time_in' => $data['time_in'],
+                'status' => $status,
+                'late_minutes' => $lateMinutes,
+                'remarks' => $data['remarks'] ?? null,
+                'created_by' => auth()->id(),
+            ]);
+
+            $this->attendanceComplianceService->markCompleted($attendance);
+
+            return $attendance;
+        });
     }
 
     public function previewAttendance(string $keyword, string $date, string $timeIn): array
@@ -113,7 +121,11 @@ class AttendanceService
             'updated_by' => auth()->id(),
         ]);
 
-        return $attendance->fresh();
+        $attendance = $attendance->fresh();
+
+        $this->attendanceComplianceService->reconcileCompleted($attendance);
+
+        return $attendance;
     }
 
     public function getAttendanceSummary(array $filters): array
@@ -136,6 +148,12 @@ class AttendanceService
 
         $totalLateMinutes = (int) $totals->total_late_minutes;
 
+        $missedCount = $this->attendanceComplianceService->countMissed(
+            $range['date_from'],
+            $range['date_to'],
+            $employeeId
+        );
+
         $compliance = $this->buildComplianceCollection($filters);
 
         return [
@@ -143,6 +161,7 @@ class AttendanceService
             'late_count' => (int) $totals->late_count,
             'total_late_minutes' => $totalLateMinutes,
             'total_late_hours' => round($totalLateMinutes / 60, 2),
+            'missed_count' => $missedCount,
             'employees_near_threshold' => $compliance->where('status', 'WARNING')->count(),
             'employees_over_threshold' => $compliance->where('status', 'THRESHOLD REACHED')->count(),
         ];
@@ -160,6 +179,7 @@ class AttendanceService
             'full_name',
             'late_count',
             'late_minutes',
+            'missed_count',
             'late_count_percentage',
             'late_minutes_percentage',
             'risk_score',
@@ -198,19 +218,26 @@ class AttendanceService
             'thresholds' => [
                 'late_minutes_threshold' => (int) config('attendance.late_minutes_threshold'),
                 'late_count_threshold' => (int) config('attendance.late_count_threshold'),
+                'missed_count_threshold' => (int) config('attendance.missed_count_threshold'),
             ],
         ];
     }
 
-    public function calculateRiskScore(float $lateMinutes, float $lateCount): float
+    public function calculateRiskScore(float $lateMinutes, float $lateCount, float $missedCount = 0): float
     {
         $minutesThreshold = (float) config('attendance.late_minutes_threshold', 60);
         $countThreshold = (float) config('attendance.late_count_threshold', 4);
+        $missedThreshold = (float) config('attendance.missed_count_threshold', 1);
 
-        $minutesComponent = $minutesThreshold > 0 ? ($lateMinutes / $minutesThreshold) * 50 : 0;
-        $countComponent = $countThreshold > 0 ? ($lateCount / $countThreshold) * 50 : 0;
+        $minutesWeight = (float) config('attendance.risk_minutes_weight', 40);
+        $countWeight = (float) config('attendance.risk_count_weight', 30);
+        $missedWeight = (float) config('attendance.risk_missed_weight', 30);
 
-        return round($minutesComponent + $countComponent, 2);
+        $minutesComponent = $minutesThreshold > 0 ? ($lateMinutes / $minutesThreshold) * $minutesWeight : 0;
+        $countComponent = $countThreshold > 0 ? ($lateCount / $countThreshold) * $countWeight : 0;
+        $missedComponent = $missedThreshold > 0 ? ($missedCount / $missedThreshold) * $missedWeight : 0;
+
+        return min(100, round($minutesComponent + $countComponent + $missedComponent, 2));
     }
 
     public function calculateComplianceStatus(float $percentage): string
@@ -286,19 +313,28 @@ class AttendanceService
         }
 
         $stats = $query->get()->keyBy('employee_id');
+        $missedStats = $this->attendanceComplianceService->getMissedStats($range['date_from'], $range['date_to']);
 
-        $employees = Employee::whereIn('id', $stats->keys())
+        $employeeIds = $stats->keys()->merge($missedStats->keys())->unique();
+
+        if ($employeeId) {
+            $employeeIds = $employeeIds->intersect([$employeeId]);
+        }
+
+        $employees = Employee::whereIn('id', $employeeIds)
             ->get(['id', 'employee_number', 'id_number', 'first_name', 'middle_name', 'last_name'])
             ->keyBy('id');
 
         $rows = collect();
 
-        foreach ($stats as $stat) {
-            $employee = $employees->get($stat->employee_id);
+        foreach ($employees as $employee) {
+            $stat = $stats->get($employee->id) ?? (object) [
+                'present_count' => 0,
+                'late_count' => 0,
+                'late_minutes' => 0,
+            ];
 
-            if (! $employee) {
-                continue;
-            }
+            $stat->missed_count = (int) ($missedStats->get($employee->id)?->missed_count ?? 0);
 
             $rows->push($this->buildComplianceRow($employee, $stat));
         }
@@ -318,13 +354,16 @@ class AttendanceService
     {
         $lateCount = (int) $stat->late_count;
         $lateMinutes = (int) $stat->late_minutes;
+        $missedCount = (int) ($stat->missed_count ?? 0);
         $minutesThreshold = (int) config('attendance.late_minutes_threshold', 60);
         $countThreshold = (int) config('attendance.late_count_threshold', 4);
+        $missedThreshold = (int) config('attendance.missed_count_threshold', 1);
 
         $lateMinutesPercentage = $minutesThreshold > 0 ? round(($lateMinutes / $minutesThreshold) * 100, 2) : 0;
         $lateCountPercentage = $countThreshold > 0 ? round(($lateCount / $countThreshold) * 100, 2) : 0;
-        $riskScore = $this->calculateRiskScore($lateMinutes, $lateCount);
-        $status = $this->calculateComplianceStatus(max($lateMinutesPercentage, $lateCountPercentage));
+        $missedPercentage = $missedThreshold > 0 ? round(($missedCount / $missedThreshold) * 100, 2) : 0;
+        $riskScore = $this->calculateRiskScore($lateMinutes, $lateCount, $missedCount);
+        $status = $this->calculateComplianceStatus(max($lateMinutesPercentage, $lateCountPercentage, $missedPercentage));
 
         return [
             'employee_id' => $employee->id,
@@ -332,8 +371,10 @@ class AttendanceService
             'full_name' => $employee->full_name,
             'late_count' => $lateCount,
             'late_minutes' => $lateMinutes,
+            'missed_count' => $missedCount,
             'late_count_percentage' => $lateCountPercentage,
             'late_minutes_percentage' => $lateMinutesPercentage,
+            'missed_percentage' => $missedPercentage,
             'risk_score' => $riskScore,
             'status' => $status,
         ];
@@ -350,6 +391,7 @@ class AttendanceService
                 'label' => $row['employee_number'],
                 'late_minutes' => $row['late_minutes'],
                 'late_count' => $row['late_count'],
+                'missed_count' => $row['missed_count'],
                 'status' => $row['status'],
             ])
             ->all();

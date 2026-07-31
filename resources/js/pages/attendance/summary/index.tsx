@@ -27,7 +27,18 @@ import {
   YAxis,
 } from 'recharts'
 import { toast } from 'sonner'
-import { Search, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Trophy } from 'lucide-react'
+import {
+  Search,
+  RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Trophy,
+  CalendarDays,
+  Timer,
+  Clock,
+  CalendarX2,
+} from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -42,6 +53,7 @@ type Summary = {
   late_count: number
   total_late_minutes: number
   total_late_hours: number
+  missed_count: number
   employees_near_threshold: number
   employees_over_threshold: number
 }
@@ -52,6 +64,7 @@ type ComplianceRow = {
   full_name: string
   late_count: number
   late_minutes: number
+  missed_count: number
   late_count_percentage: number
   late_minutes_percentage: number
   risk_score: number
@@ -74,7 +87,11 @@ type DashboardData = {
   }
   chart: ChartPoint[]
   range: { date_from: string; date_to: string }
-  thresholds: { late_minutes_threshold: number; late_count_threshold: number }
+  thresholds: {
+    late_minutes_threshold: number
+    late_count_threshold: number
+    missed_count_threshold: number
+  }
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -195,8 +212,11 @@ export default function AttendanceDashboard() {
       params.sort_dir = sortDir
       const res = await axios.get('/api/v1/attendance-dashboard', { params })
       setData(res.data.data)
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to fetch dashboard')
+    } catch (error: unknown) {
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined
+      toast.error(message || 'Failed to fetch dashboard')
     } finally {
       setLoading(false)
     }
@@ -244,9 +264,14 @@ export default function AttendanceDashboard() {
     }
   }
 
-  const thresholds = data?.thresholds ?? { late_minutes_threshold: 60, late_count_threshold: 4 }
+  const thresholds = data?.thresholds ?? {
+    late_minutes_threshold: 60,
+    late_count_threshold: 4,
+    missed_count_threshold: 1,
+  }
   const compliance = data?.compliance
   const chartData = data?.chart ?? []
+  const summary = data?.summary
 
   const tooltipLabel = (value: ReactNode) => {
     const point = chartData.find(d => d.label === value)
@@ -315,6 +340,47 @@ export default function AttendanceDashboard() {
           <Button variant="outline" size="sm" onClick={() => fetchDashboard()} disabled={loading}>
             <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Present Days</CardTitle>
+              <CalendarDays className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{summary?.present_days ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Late Count</CardTitle>
+              <Timer className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{summary?.late_count ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Late Hours</CardTitle>
+              <Clock className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold">{summary?.total_late_hours ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Missed Attendance</CardTitle>
+              <CalendarX2 className="size-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                {summary?.missed_count ?? 0}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>
@@ -437,16 +503,17 @@ export default function AttendanceDashboard() {
                   <SortHead label="Full Name" column="full_name" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Late Count" column="late_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Late Minutes" column="late_minutes" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                  <SortHead label="Missed Count" column="missed_count" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Risk Score" column="risk_score" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                   <SortHead label="Status" column="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && !compliance && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
                 )}
                 {compliance?.data.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No compliance data found</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No compliance data found</TableCell></TableRow>
                 )}
                 {compliance?.data.map((row, index) => (
                   <TableRow key={row.employee_id} className={statusRowClass[row.status]}>
@@ -461,6 +528,9 @@ export default function AttendanceDashboard() {
                     <TableCell>{row.full_name}</TableCell>
                     <TableCell>{row.late_count}</TableCell>
                     <TableCell>{row.late_minutes}</TableCell>
+                    <TableCell className={row.missed_count > 0 ? 'font-medium text-red-600 dark:text-red-400' : ''}>
+                      {row.missed_count}
+                    </TableCell>
                     <TableCell className="font-medium">{row.risk_score}</TableCell>
                     <TableCell>
                       <Badge className={statusBadge[row.status]}>{row.status}</Badge>

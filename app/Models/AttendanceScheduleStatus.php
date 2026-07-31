@@ -4,21 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
-class AttendanceLog extends Model
+class AttendanceScheduleStatus extends Model
 {
     protected $fillable = [
         'employee_id',
         'attendance_date',
         'schedule_time_id',
         'scheduled_time',
-        'time_in',
         'status',
-        'late_minutes',
-        'remarks',
-        'created_by',
-        'updated_by',
+        'attendance_log_id',
     ];
 
     protected function casts(): array
@@ -26,8 +21,6 @@ class AttendanceLog extends Model
         return [
             'attendance_date' => 'date',
             'scheduled_time'  => 'string',
-            'time_in'         => 'string',
-            'late_minutes'    => 'integer',
         ];
     }
 
@@ -41,18 +34,8 @@ class AttendanceLog extends Model
         return $this->belongsTo(ScheduleTime::class);
     }
 
-    public function scheduleStatus(): HasOne
+    public function attendanceLog(): BelongsTo
     {
-        return $this->hasOne(AttendanceScheduleStatus::class, 'attendance_log_id');
-    }
-
-    public function creator(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function updater(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'updated_by');
+        return $this->belongsTo(AttendanceLog::class);
     }
 }
