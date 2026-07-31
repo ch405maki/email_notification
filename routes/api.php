@@ -48,15 +48,17 @@ Route::prefix('v1')->group(function () {
     Route::post('/emails/preview', [EmailController::class, 'preview']);
     Route::post('/emails/send-single', [EmailController::class, 'sendSingle']);
 
+    Route::get('/employees/options', [EmployeeController::class, 'options']);
+    Route::get('/attendance-dashboard', [AttendanceController::class, 'dashboard']);
+    Route::get('/attendance', [AttendanceController::class, 'index']);
+
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/employees/options', [EmployeeController::class, 'options']);
         Route::apiResource('employees', EmployeeController::class);
         Route::apiResource('schedules', ScheduleController::class);
         Route::apiResource('employee-schedules', EmployeeScheduleAssignmentController::class);
         Route::get('/attendance-summary', [AttendanceController::class, 'summary']);
         Route::get('/attendance-compliance', [AttendanceController::class, 'compliance']);
-        Route::get('/attendance-dashboard', [AttendanceController::class, 'dashboard']);
-        Route::apiResource('attendance', AttendanceController::class);
+        Route::apiResource('attendance', AttendanceController::class)->except('index');
     });
 });
 
