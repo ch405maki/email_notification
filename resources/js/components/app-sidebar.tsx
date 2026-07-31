@@ -19,7 +19,7 @@ import {
 import { resolveUrl } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, UserRoundCog, Upload, Send, Mail, PenLine, FileText, IdCard } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, UserRoundCog, Upload, Send, Mail, PenLine, FileText, IdCard, Users, Clock, CalendarDays, BarChart3 } from 'lucide-react';
 import AppLogo from './app-logo';
 import { type SharedData } from '@/types';
 
@@ -64,6 +64,34 @@ const idAppNavItems: NavItem[] = [
         title: 'ID Application',
         href: '/id-application',
         icon: IdCard,
+    },
+];
+
+const attendanceNavItems: NavItem[] = [
+    {
+        title: 'Employees',
+        href: '/attendance/employees',
+        icon: Users,
+    },
+    {
+        title: 'Schedules',
+        href: '/attendance/schedules',
+        icon: CalendarDays,
+    },
+    {
+        title: 'Employee Schedules',
+        href: '/attendance/employee-schedules',
+        icon: Clock,
+    },
+    {
+        title: 'Attendance Logs',
+        href: '/attendance/logs',
+        icon: Clock,
+    },
+    {
+        title: 'Summary',
+        href: '/attendance/summary',
+        icon: BarChart3,
     },
 ];
 
@@ -134,6 +162,28 @@ export function AppSidebar() {
                         <SidebarGroupLabel>ID Application</SidebarGroupLabel>
                         <SidebarMenu>
                             {idAppNavItems.map((item) => (
+                                <SidebarMenuItem key={item.title}>
+                                    <SidebarMenuButton
+                                        asChild
+                                        isActive={page.url.startsWith(resolveUrl(item.href))}
+                                        tooltip={{ children: item.title }}
+                                    >
+                                        <Link href={item.href} prefetch>
+                                            {item.icon && <item.icon />}
+                                            <span>{item.title}</span>
+                                        </Link>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroup>
+                )}
+
+                {hasModule('attendance') && (
+                    <SidebarGroup className="px-2 py-0">
+                        <SidebarGroupLabel>Attendance</SidebarGroupLabel>
+                        <SidebarMenu>
+                            {attendanceNavItems.map((item) => (
                                 <SidebarMenuItem key={item.title}>
                                     <SidebarMenuButton
                                         asChild

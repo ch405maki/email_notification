@@ -12,8 +12,20 @@ use Illuminate\Support\Facades\Mail;
 // })->name('home');
 
 Route::get('/', function () {
-    return Inertia::render('auth/login');
+    return Inertia::render('attendance/public/index');
 })->name('home');
+
+Route::get('public/attendance', function () {
+    return Inertia::render('attendance/public/index');
+})->name('public.attendance.index');
+
+Route::get('public/attendance/summary', function () {
+    return Inertia::render('attendance/public/summary/index');
+})->name('public.attendance.summary');
+
+Route::get('public/attendance/logs', function () {
+    return Inertia::render('attendance/public/logs/index');
+})->name('public.attendance.logs');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
@@ -38,3 +50,4 @@ require __DIR__.'/settings.php';
 require __DIR__.'/webRoutes/users.php';
 require __DIR__.'/webRoutes/students.php';
 require __DIR__.'/webRoutes/id-application.php';
+require __DIR__.'/webRoutes/attendance.php';
