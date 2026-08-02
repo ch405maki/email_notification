@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Exceptions\AttendanceException;
 use App\Models\AttendanceLog;
+use App\Models\AttendanceScheduleDay;
+use App\Models\AttendanceScheduleDayTime;
 use App\Models\Employee;
-use App\Models\ScheduleTime;
+use App\Models\EmployeeScheduleAssignment;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +23,27 @@ class AttendanceService
     {
         return DB::transaction(function () use ($data) {
             $employee = Employee::findOrFail($data['employee_id']);
+            $date = $data['attendance_date'];
 
-            $scheduleTime = $this->getNextScheduleTime($employee, $data['attendance_date']);
+            $assignment = $this->resolveEmployeeSchedule($employee, $date);
+
+            if (! $assignment) {
+                throw new AttendanceException('No active schedule is assigned to this employee.');
+            }
+
+            $day = $this->resolveScheduleDay($assignment, $date);
+
+            if ($this->isRestDay($day)) {
+                throw new AttendanceException('Today is a rest day. No attendance is required.');
+            }
+
+            $times = $this->resolveScheduleTimes($day);
+
+            if ($times->isEmpty()) {
+                throw new AttendanceException('No required attendance schedules are configured for today.');
+            }
+
+            $scheduleTime = $this->resolveUpcomingSchedule($employee, $date);
 
             if (! $scheduleTime) {
                 throw new AttendanceException('All required attendance schedules for this date have already been completed.');
@@ -31,16 +52,20 @@ class AttendanceService
             $lateMinutes = $this->computeLateMinutes($data['time_in'], $scheduleTime->scheduled_time);
             $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
 
+            if ($status === 'LATE' && blank($data['remarks'] ?? null)) {
+                throw new AttendanceException('A reason for being late is required.');
+            }
+
             $attendance = AttendanceLog::create([
-                'employee_id' => $data['employee_id'],
-                'attendance_date' => $data['attendance_date'],
+                'employee_id'      => $data['employee_id'],
+                'attendance_date'  => $date,
                 'schedule_time_id' => $scheduleTime->id,
-                'scheduled_time' => $scheduleTime->scheduled_time,
-                'time_in' => $data['time_in'],
-                'status' => $status,
-                'late_minutes' => $lateMinutes,
-                'remarks' => $data['remarks'] ?? null,
-                'created_by' => auth()->id(),
+                'scheduled_time'   => $scheduleTime->scheduled_time,
+                'time_in'          => $data['time_in'],
+                'status'           => $status,
+                'late_minutes'     => $lateMinutes,
+                'remarks'          => $data['remarks'] ?? null,
+                'created_by'       => auth()->id(),
             ]);
 
             $this->attendanceComplianceService->markCompleted($attendance);
@@ -62,25 +87,41 @@ class AttendanceService
             throw new AttendanceException('No active employee found with that Employee Number or ID Number.');
         }
 
-        $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $date);
+        return $this->previewAttendanceForEmployee($employee, $date, $timeIn);
+    }
 
-        if ($scheduleTimes->isEmpty()) {
+    public function previewAttendanceForEmployee(Employee $employee, string $date, string $timeIn): array
+    {
+        $assignment = $this->resolveEmployeeSchedule($employee, $date);
+
+        if (! $assignment) {
             return [
-                'employee' => $employee,
-                'upcoming_schedule' => null,
+                'employee'           => $employee,
+                'upcoming_schedule'  => null,
                 'attendance_preview' => null,
-                'message' => 'No active schedule is assigned to this employee.',
+                'message'            => 'No active schedule is assigned to this employee.',
             ];
         }
 
-        $scheduleTime = $this->getNextScheduleTime($employee, $date);
+        $day = $this->resolveScheduleDay($assignment, $date);
+
+        if ($this->isRestDay($day)) {
+            return [
+                'employee'           => $employee,
+                'upcoming_schedule'  => null,
+                'attendance_preview' => null,
+                'message'            => 'Today is a rest day. Enjoy your day off!',
+            ];
+        }
+
+        $scheduleTime = $this->resolveUpcomingSchedule($employee, $date);
 
         if (! $scheduleTime) {
             return [
-                'employee' => $employee,
-                'upcoming_schedule' => null,
+                'employee'           => $employee,
+                'upcoming_schedule'  => null,
                 'attendance_preview' => null,
-                'message' => 'All required attendance schedules for this date have already been completed.',
+                'message'            => 'All required attendance schedules for this date have already been completed.',
             ];
         }
 
@@ -88,16 +129,16 @@ class AttendanceService
         $status = $lateMinutes > 0 ? 'LATE' : 'ON_TIME';
 
         return [
-            'employee' => $employee,
-            'upcoming_schedule' => [
+            'employee'           => $employee,
+            'upcoming_schedule'  => [
                 'schedule_time_id' => $scheduleTime->id,
-                'scheduled_time' => $scheduleTime->scheduled_time,
+                'scheduled_time'   => $scheduleTime->scheduled_time,
             ],
             'attendance_preview' => [
-                'status' => $status,
+                'status'       => $status,
                 'late_minutes' => $lateMinutes,
             ],
-            'message' => null,
+            'message'            => null,
         ];
     }
 
@@ -114,11 +155,11 @@ class AttendanceService
 
         $attendance->update([
             'attendance_date' => $data['attendance_date'] ?? $attendance->attendance_date,
-            'time_in' => $data['time_in'] ?? $attendance->time_in,
-            'status' => $status,
-            'late_minutes' => $lateMinutes,
-            'remarks' => $data['remarks'] ?? $attendance->remarks,
-            'updated_by' => auth()->id(),
+            'time_in'         => $data['time_in'] ?? $attendance->time_in,
+            'status'          => $status,
+            'late_minutes'    => $lateMinutes,
+            'remarks'         => $data['remarks'] ?? $attendance->remarks,
+            'updated_by'      => auth()->id(),
         ]);
 
         $attendance = $attendance->fresh();
@@ -157,13 +198,13 @@ class AttendanceService
         $compliance = $this->buildComplianceCollection($filters);
 
         return [
-            'present_days' => (int) $totals->present_days,
-            'late_count' => (int) $totals->late_count,
-            'total_late_minutes' => $totalLateMinutes,
-            'total_late_hours' => round($totalLateMinutes / 60, 2),
-            'missed_count' => $missedCount,
-            'employees_near_threshold' => $compliance->where('status', 'WARNING')->count(),
-            'employees_over_threshold' => $compliance->where('status', 'THRESHOLD REACHED')->count(),
+            'present_days'              => (int) $totals->present_days,
+            'late_count'                => (int) $totals->late_count,
+            'total_late_minutes'        => $totalLateMinutes,
+            'total_late_hours'          => round($totalLateMinutes / 60, 2),
+            'missed_count'              => $missedCount,
+            'employees_near_threshold'  => $compliance->where('status', 'WARNING')->count(),
+            'employees_over_threshold'  => $compliance->where('status', 'THRESHOLD REACHED')->count(),
         ];
     }
 
@@ -201,9 +242,9 @@ class AttendanceService
             'data' => $rows->forPage($page, $perPage)->values()->all(),
             'meta' => [
                 'current_page' => $page,
-                'last_page' => (int) ceil($rows->count() / $perPage),
-                'per_page' => $perPage,
-                'total' => $rows->count(),
+                'last_page'    => (int) ceil($rows->count() / $perPage),
+                'per_page'     => $perPage,
+                'total'        => $rows->count(),
             ],
         ];
     }
@@ -211,13 +252,13 @@ class AttendanceService
     public function getAttendanceDashboard(array $filters): array
     {
         return [
-            'summary' => $this->getAttendanceSummary($filters),
+            'summary'    => $this->getAttendanceSummary($filters),
             'compliance' => $this->getAttendanceCompliance($filters),
-            'chart' => $this->getChartData($filters),
-            'range' => $this->resolveDateRange($filters),
+            'chart'      => $this->getChartData($filters),
+            'range'      => $this->resolveDateRange($filters),
             'thresholds' => [
                 'late_minutes_threshold' => (int) config('attendance.late_minutes_threshold'),
-                'late_count_threshold' => (int) config('attendance.late_count_threshold'),
+                'late_count_threshold'   => (int) config('attendance.late_count_threshold'),
                 'missed_count_threshold' => (int) config('attendance.missed_count_threshold'),
             ],
         ];
@@ -253,6 +294,53 @@ class AttendanceService
         return 'SAFE';
     }
 
+    public function resolveEmployeeSchedule(Employee $employee, string $date): ?EmployeeScheduleAssignment
+    {
+        return $this->scheduleAssignmentService->getActiveAssignment($employee, $date);
+    }
+
+    public function resolveScheduleDay(EmployeeScheduleAssignment $assignment, string $date): ?AttendanceScheduleDay
+    {
+        return $this->scheduleAssignmentService->getScheduleDay($assignment->attendance_schedule_id, $date);
+    }
+
+    public function resolveScheduleTimes(?AttendanceScheduleDay $day): Collection
+    {
+        if (! $day || $day->is_rest_day) {
+            return collect();
+        }
+
+        return $day->times;
+    }
+
+    public function isRestDay(?AttendanceScheduleDay $day): bool
+    {
+        return (bool) ($day?->is_rest_day ?? false);
+    }
+
+    public function resolveUpcomingSchedule(Employee $employee, string $date): ?AttendanceScheduleDayTime
+    {
+        $assignment = $this->resolveEmployeeSchedule($employee, $date);
+
+        if (! $assignment) {
+            return null;
+        }
+
+        $day = $this->resolveScheduleDay($assignment, $date);
+        $times = $this->resolveScheduleTimes($day);
+
+        if ($times->isEmpty()) {
+            return null;
+        }
+
+        $usedIds = $this->getUsedScheduleTimeIds($employee->id, $date);
+        $usedTimes = $this->getUsedScheduleTimes($employee->id, $date);
+
+        return $times->first(function (AttendanceScheduleDayTime $time) use ($usedIds, $usedTimes) {
+            return ! in_array($time->id, $usedIds) && ! in_array($time->scheduled_time, $usedTimes);
+        });
+    }
+
     protected function resolveDateRange(array $filters): array
     {
         $cutoff = $filters['cutoff'] ?? 'current';
@@ -261,36 +349,36 @@ class AttendanceService
         return match ($cutoff) {
             'first' => [
                 'date_from' => $now->copy()->startOfMonth()->toDateString(),
-                'date_to' => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
+                'date_to'   => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
             ],
             'second' => [
                 'date_from' => $now->copy()->startOfMonth()->addDays(15)->toDateString(),
-                'date_to' => $now->copy()->endOfMonth()->toDateString(),
+                'date_to'   => $now->copy()->endOfMonth()->toDateString(),
             ],
             'custom' => [
                 'date_from' => $filters['date_from'] ?? $now->copy()->startOfMonth()->toDateString(),
-                'date_to' => $filters['date_to'] ?? $now->copy()->endOfMonth()->toDateString(),
+                'date_to'   => $filters['date_to'] ?? $now->copy()->endOfMonth()->toDateString(),
             ],
             'today' => [
                 'date_from' => $now->copy()->toDateString(),
-                'date_to' => $now->copy()->toDateString(),
+                'date_to'   => $now->copy()->toDateString(),
             ],
             'week' => [
                 'date_from' => $now->copy()->subDays(6)->toDateString(),
-                'date_to' => $now->copy()->toDateString(),
+                'date_to'   => $now->copy()->toDateString(),
             ],
             'month' => [
                 'date_from' => $now->copy()->subDays(29)->toDateString(),
-                'date_to' => $now->copy()->toDateString(),
+                'date_to'   => $now->copy()->toDateString(),
             ],
             default => (int) $now->format('j') <= 15
                 ? [
                     'date_from' => $now->copy()->startOfMonth()->toDateString(),
-                    'date_to' => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
+                    'date_to'   => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
                 ]
                 : [
                     'date_from' => $now->copy()->startOfMonth()->addDays(15)->toDateString(),
-                    'date_to' => $now->copy()->endOfMonth()->toDateString(),
+                    'date_to'   => $now->copy()->endOfMonth()->toDateString(),
                 ],
         };
     }
@@ -330,8 +418,8 @@ class AttendanceService
         foreach ($employees as $employee) {
             $stat = $stats->get($employee->id) ?? (object) [
                 'present_count' => 0,
-                'late_count' => 0,
-                'late_minutes' => 0,
+                'late_count'    => 0,
+                'late_minutes'  => 0,
             ];
 
             $stat->missed_count = (int) ($missedStats->get($employee->id)?->missed_count ?? 0);
@@ -366,17 +454,17 @@ class AttendanceService
         $status = $this->calculateComplianceStatus(max($lateMinutesPercentage, $lateCountPercentage, $missedPercentage));
 
         return [
-            'employee_id' => $employee->id,
-            'employee_number' => $employee->employee_number,
-            'full_name' => $employee->full_name,
-            'late_count' => $lateCount,
-            'late_minutes' => $lateMinutes,
-            'missed_count' => $missedCount,
-            'late_count_percentage' => $lateCountPercentage,
+            'employee_id'             => $employee->id,
+            'employee_number'         => $employee->employee_number,
+            'full_name'               => $employee->full_name,
+            'late_count'              => $lateCount,
+            'late_minutes'            => $lateMinutes,
+            'missed_count'            => $missedCount,
+            'late_count_percentage'   => $lateCountPercentage,
             'late_minutes_percentage' => $lateMinutesPercentage,
-            'missed_percentage' => $missedPercentage,
-            'risk_score' => $riskScore,
-            'status' => $status,
+            'missed_percentage'       => $missedPercentage,
+            'risk_score'              => $riskScore,
+            'status'                  => $status,
         ];
     }
 
@@ -387,30 +475,14 @@ class AttendanceService
             ->values()
             ->map(fn (array $row) => [
                 'employee_number' => $row['employee_number'],
-                'full_name' => $row['full_name'],
-                'label' => $row['employee_number'],
-                'late_minutes' => $row['late_minutes'],
-                'late_count' => $row['late_count'],
-                'missed_count' => $row['missed_count'],
-                'status' => $row['status'],
+                'full_name'       => $row['full_name'],
+                'label'           => $row['employee_number'],
+                'late_minutes'    => $row['late_minutes'],
+                'late_count'      => $row['late_count'],
+                'missed_count'    => $row['missed_count'],
+                'status'          => $row['status'],
             ])
             ->all();
-    }
-
-    protected function getNextScheduleTime(Employee $employee, string $date): ?ScheduleTime
-    {
-        $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $date);
-
-        if ($scheduleTimes->isEmpty()) {
-            throw new AttendanceException('No active schedule is assigned to this employee.');
-        }
-
-        $usedIds = $this->getUsedScheduleTimeIds($employee->id, $date);
-        $usedTimes = $this->getUsedScheduleTimes($employee->id, $date);
-
-        return $scheduleTimes->first(function (ScheduleTime $time) use ($usedIds, $usedTimes) {
-            return ! in_array($time->id, $usedIds) && ! in_array($time->scheduled_time, $usedTimes);
-        });
     }
 
     protected function computeLateMinutes(string $timeIn, string $scheduledTime): int

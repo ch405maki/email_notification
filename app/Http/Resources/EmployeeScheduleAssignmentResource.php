@@ -10,14 +10,15 @@ class EmployeeScheduleAssignmentResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'             => $this->id,
-            'employee_id'    => $this->employee_id,
-            'schedule_id'    => $this->schedule_id,
-            'effective_date' => $this->effective_date,
-            'employee'       => new EmployeeOptionResource($this->whenLoaded('employee')),
-            'schedule'       => new ScheduleResource($this->whenLoaded('schedule')),
-            'created_at'     => $this->created_at,
-            'updated_at'     => $this->updated_at,
+            'id'                     => $this->id,
+            'employee_id'            => $this->employee_id,
+            'attendance_schedule_id' => $this->attendance_schedule_id,
+            'effective_from'         => $this->effective_from,
+            'effective_to'           => $this->effective_to,
+            'employee'               => new EmployeeOptionResource($this->whenLoaded('employee')),
+            'attendance_schedule'    => new AttendanceScheduleResource($this->whenLoaded('attendanceSchedule')),
+            'created_at'             => $this->created_at,
+            'updated_at'             => $this->updated_at,
         ];
     }
 }

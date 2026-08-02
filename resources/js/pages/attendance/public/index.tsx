@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import PublicLayout from '@/layouts/public-layout';
 import {
@@ -119,6 +120,7 @@ export default function PublicAttendanceIndex() {
     const [lookupLoading, setLookupLoading] = useState(false);
     const [recalcLoading, setRecalcLoading] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
+    const [remarks, setRemarks] = useState('');
     const [now, setNow] = useState(() => new Date());
     const [searchTyping, setSearchTyping] = useState(false);
     const lastLookupRef = useRef('');
@@ -167,6 +169,11 @@ export default function PublicAttendanceIndex() {
                 if (requestId !== requestIdRef.current) return;
                 const data = res.data as LookupResponse;
                 if (!data.upcoming_schedule || !data.attendance_preview) {
+                    if (data.message) {
+                        setLookup(data);
+                        if (isInitial) setView('preview');
+                        return;
+                    }
                     const msg =
                         'No active employee found with that Employee Number or ID Number.';
                     if (isInitial) {
@@ -227,12 +234,17 @@ export default function PublicAttendanceIndex() {
 
     const handleConfirm = async () => {
         if (!lookup?.employee || submitLoading) return;
+        if (lookup.attendance_preview?.status === 'LATE' && !remarks.trim()) {
+            toast.error('Please provide a reason for being late');
+            return;
+        }
         setSubmitLoading(true);
         try {
             const res = await axios.post('/api/v1/attendance/public/time-in', {
                 employee_id: lookup.employee.id,
                 attendance_date: attendanceDate,
                 time_in: timeIn,
+                remarks: remarks.trim() || null,
             });
             toast.success(res.data.message);
             try {
@@ -264,6 +276,7 @@ export default function PublicAttendanceIndex() {
         setError(null);
         setAttendanceDate('');
         setTimeIn('');
+        setRemarks('');
         lastLookupRef.current = '';
         lastSearchKwRef.current = '';
     };
@@ -586,6 +599,25 @@ export default function PublicAttendanceIndex() {
                                             </span>
                                         )}
                                     </div>
+
+                                    {lookup.attendance_preview.status ===
+                                        'LATE' && (
+                                        <div className="mt-4">
+                                            <Label htmlFor="late-reason">
+                                                Reason for Late
+                                            </Label>
+                                            <Textarea
+                                                id="late-reason"
+                                                value={remarks}
+                                                onChange={(e) =>
+                                                    setRemarks(e.target.value)
+                                                }
+                                                placeholder="Provide a reason for being late"
+                                                disabled={submitLoading}
+                                                className="mt-1.5"
+                                            />
+                                        </div>
+                                    )}
 
                                     <Button
                                         className="mt-4 w-full"

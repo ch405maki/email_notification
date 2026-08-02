@@ -10,8 +10,8 @@ use App\Http\Requests\Attendance\StoreAttendanceRequest;
 use App\Http\Requests\Attendance\UpdateAttendanceRequest;
 use App\Http\Resources\AttendanceLogResource;
 use App\Models\AttendanceLog;
+use App\Models\AttendanceScheduleDayTime;
 use App\Models\Employee;
-use App\Models\ScheduleTime;
 use App\Services\AttendanceService;
 use Illuminate\Http\Request;
 
@@ -23,7 +23,7 @@ class AttendanceController extends Controller
 
     public function index(Request $request)
     {
-        $query = AttendanceLog::with(['employee', 'scheduleTime.schedule']);
+        $query = AttendanceLog::with(['employee', 'scheduleTime.day.schedule']);
 
         if ($employeeId = $request->employee_id) {
             $query->where('employee_id', $employeeId);
@@ -43,13 +43,13 @@ class AttendanceController extends Controller
 
         $logs = $query->latest('attendance_date')->paginate(10);
 
-        $nameByTime = ScheduleTime::with('schedule')->get()
-            ->mapWithKeys(fn (ScheduleTime $time) => [substr($time->scheduled_time, 0, 5) => $time->schedule?->name])
+        $nameByTime = AttendanceScheduleDayTime::with('day.schedule')->get()
+            ->mapWithKeys(fn (AttendanceScheduleDayTime $time) => [substr($time->scheduled_time, 0, 5) => $time->day?->schedule?->name])
             ->filter()
             ->unique();
 
         $logs->getCollection()->each(function (AttendanceLog $log) use ($nameByTime) {
-            $name = $log->scheduleTime?->schedule?->name;
+            $name = $log->scheduleTime?->day?->schedule?->name;
 
             if (! $name) {
                 $name = $nameByTime->get(substr($log->scheduled_time, 0, 5));
@@ -74,14 +74,14 @@ class AttendanceController extends Controller
 
         return response()->json([
             'message' => 'Attendance recorded successfully',
-            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
+            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.day.schedule'])),
         ], 201);
     }
 
     public function show(AttendanceLog $attendance)
     {
         return response()->json([
-            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
+            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.day.schedule'])),
         ]);
     }
 
@@ -91,7 +91,7 @@ class AttendanceController extends Controller
 
         return response()->json([
             'message' => 'Attendance updated successfully',
-            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.schedule'])),
+            'data' => new AttendanceLogResource($attendance->load(['employee', 'scheduleTime.day.schedule'])),
         ]);
     }
 
@@ -123,6 +123,33 @@ class AttendanceController extends Controller
         return response()->json([
             'data' => $this->attendanceService->getAttendanceDashboard($request->all()),
         ]);
+    }
+
+    public function preview(Request $request)
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'attendance_date' => ['required', 'date'],
+            'time_in' => ['required', 'date_format:H:i'],
+        ]);
+
+        $employee = Employee::findOrFail($data['employee_id']);
+
+        try {
+            $preview = $this->attendanceService->previewAttendanceForEmployee(
+                $employee,
+                $data['attendance_date'],
+                $data['time_in']
+            );
+
+            return response()->json([
+                'upcoming_schedule' => $preview['upcoming_schedule'],
+                'attendance_preview' => $preview['attendance_preview'],
+                'message' => $preview['message'],
+            ]);
+        } catch (AttendanceException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
     }
 
     public function publicLookup(PublicLookupRequest $request)
@@ -163,6 +190,7 @@ class AttendanceController extends Controller
                 'employee_id' => $request->employee_id,
                 'attendance_date' => $request->attendance_date,
                 'time_in' => $request->time_in,
+                'remarks' => $request->remarks,
             ]);
 
             return response()->json([
@@ -173,6 +201,7 @@ class AttendanceController extends Controller
                     'time_in' => $attendance->time_in,
                     'status' => $attendance->status,
                     'late_minutes' => $attendance->late_minutes,
+                    'remarks' => $attendance->remarks,
                 ],
             ], 201);
         } catch (AttendanceException $e) {

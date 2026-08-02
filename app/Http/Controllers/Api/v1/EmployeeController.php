@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\v1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Attendance\StoreEmployeeScheduleRequest;
 use App\Http\Requests\Attendance\StoreEmployeeRequest;
 use App\Http\Requests\Attendance\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeOptionResource;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
 use App\Services\EmployeeService;
+use App\Services\ScheduleAssignmentService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\AttendanceLog;
@@ -16,7 +18,8 @@ use App\Models\AttendanceLog;
 class EmployeeController extends Controller
 {
     public function __construct(
-        protected EmployeeService $employeeService
+        protected EmployeeService $employeeService,
+        protected ScheduleAssignmentService $scheduleAssignmentService
     ) {}
 
     public function index(Request $request)
@@ -67,9 +70,7 @@ class EmployeeController extends Controller
 
     public function options(Request $request)
     {
-        $query = Employee::with([
-            'scheduleAssignments.schedule.scheduleTimes'
-        ]);
+        $query = Employee::query();
 
         if ($search = $request->search) {
             $query->where(function ($q) use ($search) {
@@ -81,11 +82,9 @@ class EmployeeController extends Controller
         }
 
         $employees = $query->get()->map(function ($employee) {
-            $assignment = $employee->scheduleAssignments->first();
+            $today = Carbon::today()->toDateString();
 
-            $scheduleTimes = $assignment?->schedule?->scheduleTimes
-                ?->sortBy('sequence')
-                ?->values();
+            $scheduleTimes = $this->scheduleAssignmentService->getActiveScheduleTimes($employee, $today);
 
             $usedIds = AttendanceLog::where('employee_id', $employee->id)
                 ->whereDate('attendance_date', Carbon::today())
@@ -93,20 +92,37 @@ class EmployeeController extends Controller
                 ->filter()
                 ->all();
 
-            $nextSchedule = $scheduleTimes?->first(function ($time) use ($usedIds) {
+            $nextSchedule = $scheduleTimes->first(function ($time) use ($usedIds) {
                 return !in_array($time->id, $usedIds);
             });
 
             return [
-                'id' => $employee->id,
+                'id'              => $employee->id,
                 'employee_number' => $employee->employee_number,
-                'full_name' => $employee->full_name,
-                'schedule_time' => $nextSchedule?->scheduled_time,
+                'full_name'       => $employee->full_name,
+                'schedule_time'   => $nextSchedule?->scheduled_time,
             ];
         });
 
         return response()->json([
             'data' => $employees,
         ]);
+    }
+
+    public function updateSchedule(StoreEmployeeScheduleRequest $request, Employee $employee)
+    {
+        $assignment = $this->scheduleAssignmentService->assignSchedule([
+            'employee_id'            => $employee->id,
+            'attendance_schedule_id' => $request->attendance_schedule_id,
+            'effective_from'         => $request->effective_from,
+            'effective_to'           => $request->effective_to,
+        ]);
+
+        return response()->json([
+            'message' => 'Schedule assigned successfully',
+            'data'    => new \App\Http\Resources\EmployeeScheduleAssignmentResource(
+                $assignment->load('employee', 'attendanceSchedule.days.times')
+            ),
+        ], 201);
     }
 }

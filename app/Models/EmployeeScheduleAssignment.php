@@ -9,14 +9,16 @@ class EmployeeScheduleAssignment extends Model
 {
     protected $fillable = [
         'employee_id',
-        'schedule_id',
-        'effective_date',
+        'attendance_schedule_id',
+        'effective_from',
+        'effective_to',
     ];
 
     protected function casts(): array
     {
         return [
-            'effective_date' => 'date',
+            'effective_from' => 'date',
+            'effective_to'   => 'date',
         ];
     }
 
@@ -25,8 +27,8 @@ class EmployeeScheduleAssignment extends Model
         return $this->belongsTo(Employee::class);
     }
 
-    public function schedule(): BelongsTo
+    public function attendanceSchedule(): BelongsTo
     {
-        return $this->belongsTo(Schedule::class);
+        return $this->belongsTo(AttendanceSchedule::class);
     }
 }

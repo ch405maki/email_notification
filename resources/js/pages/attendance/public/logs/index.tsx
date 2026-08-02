@@ -6,12 +6,10 @@ import { type BreadcrumbItem } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { RefreshCw, Clock } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Public', href: '/public/attendance' },
@@ -70,8 +68,6 @@ export default function AttendanceLogIndex() {
   const [rangePreset, setRangePreset] = useState('custom')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ employee_id: '', attendance_date: '', time_in: '', remarks: '' })
 
   const fetchLogs = useCallback(async (page = 1) => {
     setLoading(true)
@@ -100,31 +96,6 @@ export default function AttendanceLogIndex() {
   useEffect(() => { fetchEmployees() }, [fetchEmployees])
   useEffect(() => { fetchLogs() }, [fetchLogs])
 
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const toDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-
-  const todayStr = () => toDateStr(new Date())
-  const nowStr = () => {
-    const d = new Date()
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-
-  const openCreate = () => {
-    setForm({ employee_id: '', attendance_date: todayStr(), time_in: nowStr(), remarks: '' })
-    setOpen(true)
-  }
-
-  const handleSave = async () => {
-    try {
-      await axios.post('/api/v1/attendance', { ...form, employee_id: Number(form.employee_id) })
-      toast.success('Attendance recorded')
-      setOpen(false)
-      fetchLogs()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Save failed')
-    }
-  }
-
   const handleRangePreset = (value: string) => {
     setRangePreset(value)
     const today = new Date()
@@ -152,9 +123,8 @@ export default function AttendanceLogIndex() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Attendance Logs</h1>
-            <p className="text-sm text-muted-foreground">View and record attendance</p>
+            <p className="text-sm text-muted-foreground">View attendance records</p>
           </div>
-          <Button onClick={openCreate}><Clock /> Record Attendance</Button>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -238,29 +208,6 @@ export default function AttendanceLogIndex() {
           </div>
         )}
       </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Record Attendance</DialogTitle></DialogHeader>
-          <div className="grid gap-4">
-            <div>
-              <Label>Employee</Label>
-              <Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.full_name} ({e.employee_number})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Date</Label><Input type="date" value={form.attendance_date} onChange={e => setForm({ ...form, attendance_date: e.target.value })} /></div>
-            <div><Label>Time In</Label><Input type="time" value={form.time_in} onChange={e => setForm({ ...form, time_in: e.target.value })} /></div>
-            <div><Label>Remarks</Label><Input value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} /></div>
-            <Button onClick={handleSave}>Save</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </PublicLayout>
   )
 }

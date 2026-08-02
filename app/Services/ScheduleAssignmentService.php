@@ -2,50 +2,78 @@
 
 namespace App\Services;
 
+use App\Models\AttendanceScheduleDay;
 use App\Models\Employee;
 use App\Models\EmployeeScheduleAssignment;
-use App\Models\Schedule;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class ScheduleAssignmentService
 {
     public function assignSchedule(array $data): EmployeeScheduleAssignment
     {
-        return EmployeeScheduleAssignment::create($data);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+            $effectiveFrom = Carbon::parse($data['effective_from'])->toDateString();
+
+            EmployeeScheduleAssignment::where('employee_id', $data['employee_id'])
+                ->where(function ($query) use ($effectiveFrom) {
+                    $query->whereNull('effective_to')
+                        ->orWhere('effective_to', '>=', $effectiveFrom);
+                })
+                ->update([
+                    'effective_to' => Carbon::parse($effectiveFrom)->subDay()->toDateString(),
+                ]);
+
+            return EmployeeScheduleAssignment::create([
+                'employee_id'            => $data['employee_id'],
+                'attendance_schedule_id' => $data['attendance_schedule_id'],
+                'effective_from'         => $effectiveFrom,
+                'effective_to'           => null,
+            ]);
+        });
     }
 
-    public function getActiveSchedule(Employee $employee): ?Schedule
+    public function getActiveAssignment(Employee $employee, string $date): ?EmployeeScheduleAssignment
     {
-        $assignment = $employee->scheduleAssignments()
-            ->orderByDesc('effective_date')
+        return $employee->scheduleAssignments()
+            ->where('effective_from', '<=', $date)
+            ->where(function ($query) use ($date) {
+                $query->whereNull('effective_to')
+                    ->orWhere('effective_to', '>=', $date);
+            })
+            ->latest('effective_from')
             ->first();
+    }
 
-        return $assignment?->schedule;
+    public function getActiveSchedule(Employee $employee, string $date): ?\App\Models\AttendanceSchedule
+    {
+        return $this->getActiveAssignment($employee, $date)?->attendanceSchedule;
     }
 
     public function getActiveScheduleTimes(Employee $employee, string $date): Collection
     {
-        $assignments = $employee->scheduleAssignments()
-            ->where('effective_date', '<=', $date)
-            ->get();
+        $assignment = $this->getActiveAssignment($employee, $date);
 
-        if ($assignments->isEmpty()) {
+        if (! $assignment) {
             return collect();
         }
 
-        $latestDate = $assignments->max('effective_date')->toDateString();
+        $day = $this->getScheduleDay($assignment->attendance_schedule_id, $date);
 
-        $activeAssignments = $assignments->filter(
-            fn (EmployeeScheduleAssignment $assignment) => $assignment->effective_date->toDateString() === $latestDate
-        );
+        if (! $day || $day->is_rest_day) {
+            return collect();
+        }
 
-        return $activeAssignments
-            ->load('schedule.scheduleTimes')
-            ->pluck('schedule.scheduleTimes')
-            ->filter()
-            ->flatten()
-            ->unique('id')
-            ->sortBy('scheduled_time')
-            ->values();
+        return $day->times;
+    }
+
+    public function getScheduleDay(int $attendanceScheduleId, string $date): ?AttendanceScheduleDay
+    {
+        $dayOfWeek = Carbon::parse($date)->dayOfWeek;
+
+        return AttendanceScheduleDay::where('attendance_schedule_id', $attendanceScheduleId)
+            ->where('day_of_week', $dayOfWeek)
+            ->with('times')
+            ->first();
     }
 }

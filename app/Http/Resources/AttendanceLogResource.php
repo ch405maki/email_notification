@@ -19,9 +19,9 @@ class AttendanceLogResource extends JsonResource
             'status'           => $this->status,
             'late_minutes'     => $this->late_minutes,
             'remarks'          => $this->remarks,
-            'schedule_name'    => $this->schedule_name ?? ($this->whenLoaded('scheduleTime') ? $this->scheduleTime?->schedule?->name : null),
+            'schedule_name'    => $this->schedule_name ?? ($this->whenLoaded('scheduleTime') ? $this->scheduleTime?->day?->schedule?->name : null),
             'employee'         => new EmployeeOptionResource($this->whenLoaded('employee')),
-            'schedule_time'    => new ScheduleTimeResource($this->whenLoaded('scheduleTime')),
+            'schedule_time'    => new AttendanceScheduleDayTimeResource($this->whenLoaded('scheduleTime')),
             'created_at'       => $this->created_at,
             'updated_at'       => $this->updated_at,
         ];

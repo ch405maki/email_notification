@@ -2,14 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceSchedule;
 use App\Models\AttendanceScheduleStatus;
 use App\Models\Employee;
 use App\Models\EmployeeScheduleAssignment;
-use App\Models\Schedule;
+use App\Models\Role;
+use App\Models\User;
 use App\Services\AttendanceComplianceService;
 use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class AttendanceComplianceTest extends TestCase
@@ -20,7 +23,7 @@ class AttendanceComplianceTest extends TestCase
 
     private Employee $employee;
 
-    private Schedule $schedule;
+    private AttendanceSchedule $schedule;
 
     protected function setUp(): void
     {
@@ -36,10 +39,15 @@ class AttendanceComplianceTest extends TestCase
             'status' => 'ACTIVE',
         ]);
 
-        $this->schedule = Schedule::create(['name' => 'Regular', 'start_time' => '08:00:00']);
+        $this->schedule = AttendanceSchedule::create(['name' => 'Regular']);
+
+        $friday = $this->schedule->days()->create([
+            'day_of_week' => 5,
+            'is_rest_day' => false,
+        ]);
 
         foreach ([['08:00', 1], ['13:00', 2]] as [$time, $sequence]) {
-            $this->schedule->scheduleTimes()->create([
+            $friday->times()->create([
                 'scheduled_time' => $time,
                 'sequence' => $sequence,
             ]);
@@ -47,8 +55,9 @@ class AttendanceComplianceTest extends TestCase
 
         EmployeeScheduleAssignment::create([
             'employee_id' => $this->employee->id,
-            'schedule_id' => $this->schedule->id,
-            'effective_date' => '2026-07-30',
+            'attendance_schedule_id' => $this->schedule->id,
+            'effective_from' => '2026-07-30',
+            'effective_to' => null,
         ]);
     }
 
@@ -58,6 +67,7 @@ class AttendanceComplianceTest extends TestCase
             'employee_id' => $this->employee->id,
             'attendance_date' => self::DATE,
             'time_in' => '08:03',
+            'remarks' => 'Heavy traffic',
         ]);
 
         $status = AttendanceScheduleStatus::where('attendance_log_id', $log->id)->first();
@@ -95,8 +105,9 @@ class AttendanceComplianceTest extends TestCase
 
         EmployeeScheduleAssignment::create([
             'employee_id' => $this->employee->id,
-            'schedule_id' => $this->schedule->id,
-            'effective_date' => '2026-08-01',
+            'attendance_schedule_id' => $this->schedule->id,
+            'effective_from' => '2026-08-01',
+            'effective_to' => null,
         ]);
 
         app(AttendanceComplianceService::class)->generateMissedAttendance(self::DATE);
@@ -112,6 +123,7 @@ class AttendanceComplianceTest extends TestCase
             'employee_id' => $this->employee->id,
             'attendance_date' => self::DATE,
             'time_in' => '08:03',
+            'remarks' => 'Heavy traffic',
         ]);
 
         app(AttendanceComplianceService::class)->generateMissedAttendance(self::DATE);
@@ -129,6 +141,7 @@ class AttendanceComplianceTest extends TestCase
             'employee_id' => $this->employee->id,
             'attendance_date' => self::DATE,
             'time_in' => '08:03',
+            'remarks' => 'Heavy traffic',
         ]);
 
         AttendanceScheduleStatus::query()->delete();
@@ -178,6 +191,7 @@ class AttendanceComplianceTest extends TestCase
             'employee_id' => $this->employee->id,
             'attendance_date' => self::DATE,
             'time_in' => '08:03',
+            'remarks' => 'Heavy traffic',
         ]);
 
         $complianceService->generateMissedAttendance(self::DATE);
@@ -188,10 +202,103 @@ class AttendanceComplianceTest extends TestCase
             'employee_id' => $this->employee->id,
             'attendance_date' => self::DATE,
             'time_in' => '13:05',
+            'remarks' => 'Extended break',
         ]);
 
         $this->assertSame(0, AttendanceScheduleStatus::where('status', AttendanceComplianceService::MISSED)->count());
         $this->assertSame(2, AttendanceScheduleStatus::where('status', AttendanceComplianceService::COMPLETED)->count());
+    }
+
+    public function test_assign_schedule_via_employee_route_uses_url_employee_id()
+    {
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+
+        Sanctum::actingAs(User::create([
+            'name' => 'Admin',
+            'email' => 'admin@test.com',
+            'password' => 'password',
+            'role_id' => $role->id,
+        ]));
+
+        $employee = Employee::create([
+            'employee_number' => 'EMP-002',
+            'id_number' => 'ID-002',
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'status' => 'ACTIVE',
+        ]);
+
+        $response = $this->putJson("/api/v1/employees/{$employee->id}/schedule", [
+            'attendance_schedule_id' => $this->schedule->id,
+            'effective_from' => '2026-08-01',
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('employee_schedule_assignments', [
+            'employee_id' => $employee->id,
+            'attendance_schedule_id' => $this->schedule->id,
+            'effective_to' => null,
+        ]);
+    }
+
+    public function test_late_time_in_requires_remarks()
+    {
+        $this->expectException(\App\Exceptions\AttendanceException::class);
+        $this->expectExceptionMessage('A reason for being late is required.');
+
+        app(AttendanceService::class)->createAttendance([
+            'employee_id' => $this->employee->id,
+            'attendance_date' => self::DATE,
+            'time_in' => '08:03',
+        ]);
+    }
+
+    public function test_late_attendance_saves_remarks_and_returns_them()
+    {
+        $attendanceService = app(AttendanceService::class);
+
+        $log = $attendanceService->createAttendance([
+            'employee_id' => $this->employee->id,
+            'attendance_date' => self::DATE,
+            'time_in' => '08:03',
+            'remarks' => 'Heavy traffic',
+        ]);
+
+        $this->assertSame('LATE', $log->status);
+        $this->assertSame('Heavy traffic', $log->remarks);
+    }
+
+    public function test_preview_endpoint_reports_late_status()
+    {
+        $response = $this->postJson('/api/v1/attendance/preview', [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => self::DATE,
+            'time_in' => '08:03',
+        ]);
+
+        $response->assertOk();
+
+        $response->assertJson([
+            'attendance_preview' => [
+                'status' => 'LATE',
+                'late_minutes' => 3,
+            ],
+        ]);
+    }
+
+    public function test_rest_day_rejects_attendance_and_skips_missed()
+    {
+        $sunday = $this->schedule->days()->create([
+            'day_of_week' => 0,
+            'is_rest_day' => true,
+        ]);
+
+        $this->assertTrue($sunday->is_rest_day);
+
+        app(AttendanceComplianceService::class)->generateMissedAttendance('2026-08-02');
+
+        $this->assertSame(0, AttendanceScheduleStatus::count());
     }
 
     protected function tearDown(): void

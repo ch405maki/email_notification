@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
@@ -74,6 +75,7 @@ export default function AttendanceLogIndex() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<AttendanceLog | null>(null)
   const [form, setForm] = useState({ employee_id: '', attendance_date: '', time_in: '', remarks: '' })
+  const [previewStatus, setPreviewStatus] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState<AttendanceLog | null>(null)
 
@@ -103,6 +105,28 @@ export default function AttendanceLogIndex() {
 
   useEffect(() => { fetchEmployees() }, [fetchEmployees])
   useEffect(() => { fetchLogs() }, [fetchLogs])
+
+  useEffect(() => {
+    if (editing) {
+      setPreviewStatus(editing.status)
+      return
+    }
+    setPreviewStatus(null)
+    if (!form.employee_id || !form.attendance_date || !form.time_in) return
+    const timer = setTimeout(async () => {
+      try {
+        const res = await axios.post('/api/v1/attendance/preview', {
+          employee_id: Number(form.employee_id),
+          attendance_date: form.attendance_date,
+          time_in: form.time_in,
+        })
+        setPreviewStatus(res.data.attendance_preview?.status ?? null)
+      } catch {
+        setPreviewStatus(null)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [editing, form.employee_id, form.attendance_date, form.time_in])
 
   const pad = (n: number) => String(n).padStart(2, '0')
   const toDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -145,8 +169,12 @@ export default function AttendanceLogIndex() {
   }
 
   const handleSave = async () => {
+    if (previewStatus === 'LATE' && !form.remarks.trim()) {
+      toast.error('Please provide a reason for being late')
+      return
+    }
     try {
-      const payload = { ...form, employee_id: Number(form.employee_id) }
+      const payload = { ...form, remarks: form.remarks.trim() || null, employee_id: Number(form.employee_id) }
       if (editing) {
         await axios.put(`/api/v1/attendance/${editing.id}`, payload)
         toast.success('Attendance updated')
@@ -292,7 +320,12 @@ export default function AttendanceLogIndex() {
             )}
             <div><Label>Date</Label><Input type="date" value={form.attendance_date} onChange={e => setForm({ ...form, attendance_date: e.target.value })} /></div>
             <div><Label>Time In</Label><Input type="time" value={form.time_in} onChange={e => setForm({ ...form, time_in: e.target.value })} /></div>
-            <div><Label>Remarks</Label><Input value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} /></div>
+            {previewStatus === 'LATE' && (
+              <div>
+                <Label>Reason for Late</Label>
+                <Textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} placeholder="Provide a reason for being late" />
+              </div>
+            )}
             <Button onClick={handleSave}>Save</Button>
           </div>
         </DialogContent>

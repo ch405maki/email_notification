@@ -12,6 +12,7 @@ class PublicTimeInRequest extends FormRequest
             'employee_id' => ['required', 'exists:employees,id'],
             'attendance_date' => ['required', 'date'],
             'time_in' => ['required', 'date_format:H:i'],
+            'remarks' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

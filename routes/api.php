@@ -1,13 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\v1\AttendanceController;
+use App\Http\Controllers\Api\v1\AttendanceScheduleController;
 use App\Http\Controllers\Api\v1\EmailController;
 use App\Http\Controllers\Api\v1\EmailLogController;
 use App\Http\Controllers\Api\v1\EmployeeController;
 use App\Http\Controllers\Api\v1\EmployeeScheduleAssignmentController;
 use App\Http\Controllers\Api\v1\ModulesController;
 use App\Http\Controllers\Api\v1\RolesController;
-use App\Http\Controllers\Api\v1\ScheduleController;
 use App\Http\Controllers\Api\v1\StudentController;
 use App\Http\Controllers\Api\v1\UsersController;
 use Illuminate\Http\Request;
@@ -54,10 +54,12 @@ Route::prefix('v1')->group(function () {
     Route::post('/attendance', [AttendanceController::class, 'store']);
     Route::post('/attendance/public/lookup', [AttendanceController::class, 'publicLookup']);
     Route::post('/attendance/public/time-in', [AttendanceController::class, 'publicTimeIn']);
+    Route::post('/attendance/preview', [AttendanceController::class, 'preview']);
 
     Route::middleware(['auth:sanctum', 'module:attendance'])->group(function () {
         Route::apiResource('employees', EmployeeController::class);
-        Route::apiResource('schedules', ScheduleController::class);
+        Route::put('/employees/{employee}/schedule', [EmployeeController::class, 'updateSchedule']);
+        Route::apiResource('attendance-schedules', AttendanceScheduleController::class);
         Route::apiResource('employee-schedules', EmployeeScheduleAssignmentController::class);
         Route::get('/attendance-summary', [AttendanceController::class, 'summary']);
         Route::get('/attendance-compliance', [AttendanceController::class, 'compliance']);

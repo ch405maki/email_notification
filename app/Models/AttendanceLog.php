@@ -38,7 +38,7 @@ class AttendanceLog extends Model
 
     public function scheduleTime(): BelongsTo
     {
-        return $this->belongsTo(ScheduleTime::class);
+        return $this->belongsTo(AttendanceScheduleDayTime::class, 'schedule_time_id');
     }
 
     public function scheduleStatus(): HasOne
