@@ -28,6 +28,7 @@ type Employee = {
   middle_name: string | null
   last_name: string
   full_name: string
+  section: string | null
   status: string
 }
 
@@ -42,7 +43,7 @@ export default function EmployeeIndex() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Employee | null>(null)
-  const [form, setForm] = useState({ employee_number: '', id_number: '', first_name: '', middle_name: '', last_name: '', status: 'ACTIVE' })
+  const [form, setForm] = useState({ employee_number: '', id_number: '', first_name: '', middle_name: '', last_name: '', section: '', status: 'ACTIVE' })
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState<Employee | null>(null)
   const [saving, setSaving] = useState(false)
@@ -70,7 +71,7 @@ export default function EmployeeIndex() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ employee_number: '', id_number: '', first_name: '', middle_name: '', last_name: '', status: 'ACTIVE' })
+    setForm({ employee_number: '', id_number: '', first_name: '', middle_name: '', last_name: '', section: '', status: 'ACTIVE' })
     setOpen(true)
   }
 
@@ -82,6 +83,7 @@ export default function EmployeeIndex() {
       first_name: emp.first_name,
       middle_name: emp.middle_name ?? '',
       last_name: emp.last_name,
+      section: emp.section ?? '',
       status: emp.status,
     })
     setOpen(true)
@@ -146,22 +148,24 @@ export default function EmployeeIndex() {
                 <TableHead>Employee #</TableHead>
                 <TableHead>ID Number</TableHead>
                 <TableHead>Full Name</TableHead>
+                <TableHead>Section</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && !employees && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow>
               )}
               {employees?.data.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No employees found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No employees found</TableCell></TableRow>
               )}
               {employees?.data.map(emp => (
                 <TableRow key={emp.id}>
                   <TableCell className="font-mono">{emp.employee_number}</TableCell>
                   <TableCell className="font-mono">{emp.id_number ?? '—'}</TableCell>
                   <TableCell>{emp.full_name}</TableCell>
+                  <TableCell>{emp.section ?? '—'}</TableCell>
                   <TableCell>
                     <Badge variant={emp.status === 'ACTIVE' ? 'default' : 'destructive'}>{emp.status}</Badge>
                   </TableCell>
@@ -202,6 +206,16 @@ export default function EmployeeIndex() {
                 <SelectContent>
                   <SelectItem value="ACTIVE">ACTIVE</SelectItem>
                   <SelectItem value="INACTIVE">INACTIVE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Section</Label>
+              <Select value={form.section} onValueChange={v => setForm({ ...form, section: v })}>
+                <SelectTrigger><SelectValue placeholder="Select section" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Systems">Systems</SelectItem>
+                  <SelectItem value="Technical">Technical</SelectItem>
                 </SelectContent>
               </Select>
             </div>

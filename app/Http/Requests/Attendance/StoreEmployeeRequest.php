@@ -10,11 +10,12 @@ class StoreEmployeeRequest extends FormRequest
     {
         return [
             'employee_number' => ['required', 'string', 'max:255', 'unique:employees,employee_number'],
-            'id_number'       => ['nullable', 'string', 'max:255', 'unique:employees,id_number'],
-            'first_name'      => ['required', 'string', 'max:255'],
-            'middle_name'     => ['nullable', 'string', 'max:255'],
-            'last_name'       => ['required', 'string', 'max:255'],
-            'status'          => ['sometimes', 'string', 'in:ACTIVE,INACTIVE'],
+            'id_number' => ['nullable', 'string', 'max:255', 'unique:employees,id_number'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'section' => ['nullable', 'string', 'in:Systems,Technical'],
+            'status' => ['sometimes', 'string', 'in:ACTIVE,INACTIVE'],
         ];
     }
 }

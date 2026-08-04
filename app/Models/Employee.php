@@ -13,6 +13,7 @@ class Employee extends Model
         'first_name',
         'middle_name',
         'last_name',
+        'section',
         'status',
     ];
 
@@ -25,7 +26,7 @@ class Employee extends Model
 
     public function getFullNameAttribute(): string
     {
-        return trim($this->last_name . ', ' . $this->first_name . ($this->middle_name ? ' ' . $this->middle_name . '.' : ''));
+        return trim($this->last_name.', '.$this->first_name.($this->middle_name ? ' '.$this->middle_name.'.' : ''));
     }
 
     public function scheduleAssignments(): HasMany

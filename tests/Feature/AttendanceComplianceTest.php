@@ -301,6 +301,69 @@ class AttendanceComplianceTest extends TestCase
         $this->assertSame(0, AttendanceScheduleStatus::count());
     }
 
+    public function test_employee_schedule_export_groups_by_section_with_month_title()
+    {
+        $role = Role::create(['name' => 'Admin', 'slug' => 'admin']);
+
+        Sanctum::actingAs(User::create([
+            'name' => 'Admin',
+            'email' => 'admin@test.com',
+            'password' => 'password',
+            'role_id' => $role->id,
+        ]));
+
+        $this->employee->update(['section' => 'Systems']);
+
+        $technical = Employee::create([
+            'employee_number' => 'EMP-002',
+            'id_number' => 'ID-002',
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'section' => 'Technical',
+            'status' => 'ACTIVE',
+        ]);
+
+        EmployeeScheduleAssignment::create([
+            'employee_id' => $technical->id,
+            'attendance_schedule_id' => $this->schedule->id,
+            'effective_from' => '2026-07-30',
+            'effective_to' => null,
+        ]);
+
+        $this->schedule->days()->create([
+            'day_of_week' => 0,
+            'is_rest_day' => true,
+        ]);
+
+        $response = $this->getJson('/api/v1/employee-schedules/export');
+
+        $response->assertOk();
+
+        $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $response->assertHeader('content-disposition', 'attachment; filename="employee-schedules-2026-08-01.xlsx"');
+
+        $path = tempnam(sys_get_temp_dir(), 'sched-export-').'.xlsx';
+        file_put_contents($path, $response->streamedContent());
+
+        $spreadsheet = (new \PhpOffice\PhpSpreadsheet\Reader\Xlsx)->load($path);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $this->assertSame('EMPLOYEE SCHEDULES - AUGUST 2026', $sheet->getCell('A1')->getValue());
+        $this->assertSame('NAME', $sheet->getCell('A2')->getValue());
+        $this->assertSame('MON', $sheet->getCell('B2')->getValue());
+        $this->assertSame('SUN', $sheet->getCell('H2')->getValue());
+        $this->assertSame('TECHNICAL', $sheet->getCell('A3')->getValue());
+        $this->assertSame('DOE, JANE', $sheet->getCell('A4')->getValue());
+        $this->assertSame('SYSTEMS', $sheet->getCell('A5')->getValue());
+        $this->assertSame('MANUEL, MARK', $sheet->getCell('A6')->getValue());
+        $this->assertSame('8:00AM - 1:00PM', $sheet->getCell('F6')->getValue());
+        $this->assertSame('RESTDAY', $sheet->getCell('H4')->getValue());
+        $this->assertSame(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, $sheet->getCell('H4')->getStyle()->getFill()->getFillType());
+        $this->assertSame('FFFEE2E2', $sheet->getCell('H4')->getStyle()->getFill()->getStartColor()->getARGB());
+
+        @unlink($path);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();

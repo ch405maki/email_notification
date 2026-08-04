@@ -60,6 +60,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('employees', EmployeeController::class);
         Route::put('/employees/{employee}/schedule', [EmployeeController::class, 'updateSchedule']);
         Route::apiResource('attendance-schedules', AttendanceScheduleController::class);
+        Route::get('/employee-schedules/export', [EmployeeScheduleAssignmentController::class, 'export']);
         Route::apiResource('employee-schedules', EmployeeScheduleAssignmentController::class);
         Route::get('/attendance-summary', [AttendanceController::class, 'summary']);
         Route::get('/attendance-compliance', [AttendanceController::class, 'compliance']);

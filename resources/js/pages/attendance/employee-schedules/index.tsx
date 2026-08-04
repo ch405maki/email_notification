@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Search, RefreshCw, CalendarPlus, Trash2, CheckCircle2, MinusCircle } from 'lucide-react'
+import { Search, RefreshCw, CalendarPlus, Trash2, CheckCircle2, MinusCircle, FileDown } from 'lucide-react'
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Dashboard', href: '/dashboard' },
@@ -64,6 +64,7 @@ export default function EmployeeScheduleIndex() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [form, setForm] = useState({ employee_id: '', attendance_schedule_id: '', effective_from: '' })
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState<Assignment | null>(null)
 
@@ -118,6 +119,25 @@ export default function EmployeeScheduleIndex() {
     }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await axios.get('/api/v1/employee-schedules/export', { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `employee-schedules-${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleting) return
     try {
@@ -146,7 +166,10 @@ export default function EmployeeScheduleIndex() {
             <h1 className="text-xl font-semibold">Employee Schedules</h1>
             <p className="text-sm text-muted-foreground">Assign weekly schedule templates to employees</p>
           </div>
-          <Button onClick={openCreate}><CalendarPlus /> Assign Schedule</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleExport} disabled={exporting}><FileDown className="size-4" /> {exporting ? 'Exporting...' : 'Export Excel'}</Button>
+            <Button onClick={openCreate}><CalendarPlus /> Assign Schedule</Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

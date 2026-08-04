@@ -7,13 +7,24 @@ use App\Http\Requests\Attendance\StoreEmployeeScheduleRequest;
 use App\Http\Requests\Attendance\UpdateEmployeeScheduleRequest;
 use App\Http\Resources\EmployeeScheduleAssignmentResource;
 use App\Models\EmployeeScheduleAssignment;
+use App\Services\EmployeeScheduleExportService;
 use App\Services\ScheduleAssignmentService;
+use Illuminate\Http\Request;
 
 class EmployeeScheduleAssignmentController extends Controller
 {
     public function __construct(
-        protected ScheduleAssignmentService $scheduleAssignmentService
+        protected ScheduleAssignmentService $scheduleAssignmentService,
+        protected EmployeeScheduleExportService $exportService
     ) {}
+
+    public function export(Request $request)
+    {
+        return $this->exportService->stream(
+            section: $request->query('section') ?: null,
+            date: $request->query('date') ?: null,
+        );
+    }
 
     public function index()
     {
@@ -25,8 +36,8 @@ class EmployeeScheduleAssignmentController extends Controller
             'data' => EmployeeScheduleAssignmentResource::collection($assignments),
             'meta' => [
                 'current_page' => $assignments->currentPage(),
-                'last_page'    => $assignments->lastPage(),
-                'total'        => $assignments->total(),
+                'last_page' => $assignments->lastPage(),
+                'total' => $assignments->total(),
             ],
         ]);
     }
@@ -37,7 +48,7 @@ class EmployeeScheduleAssignmentController extends Controller
 
         return response()->json([
             'message' => 'Schedule assigned successfully',
-            'data'    => new EmployeeScheduleAssignmentResource(
+            'data' => new EmployeeScheduleAssignmentResource(
                 $assignment->load('employee', 'attendanceSchedule.days.times')
             ),
         ], 201);
@@ -58,7 +69,7 @@ class EmployeeScheduleAssignmentController extends Controller
 
         return response()->json([
             'message' => 'Schedule assignment updated successfully',
-            'data'    => new EmployeeScheduleAssignmentResource(
+            'data' => new EmployeeScheduleAssignmentResource(
                 $employeeSchedule->fresh()->load('employee', 'attendanceSchedule.days.times')
             ),
         ]);
